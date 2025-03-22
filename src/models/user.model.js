@@ -1,17 +1,13 @@
 import mongoose ,{Schema} from "mongoose";
 import jwt from "jsonwebtoken"
-import bcrypt from "bcryptjs"
-
-
-
-
+import bcrypt from "bcrypt"
 
 const userSchema = new Schema (
     {
 
         username: {
             type :String,
-            required: type,
+            required: true,
             unique: true,
             trim: true,
             lowecase: true,
@@ -19,7 +15,7 @@ const userSchema = new Schema (
         },
         email: {
             type :String,
-            required: type,
+            required:true,
             unique: true,
             trim: true,
             lowecase: true,
@@ -31,13 +27,13 @@ const userSchema = new Schema (
 
         fullName: {
             type :String,
-            required: type,
+            required: true,
             trim: true,
             index: true
         },
         avatar : { //cloudinary url
             type :String,
-            required: type,
+            required: true,
         },
         coverImage :{
             type :String,
@@ -48,8 +44,10 @@ const userSchema = new Schema (
         },
         refreshToken:{
             type :String
-        },
-        timestamps:true
+        }
+    },
+        {
+            timestamps: true
         
     }
 )
@@ -79,10 +77,7 @@ userSchema.method.generateAccessToken = function(){
         expiresIn: process.env.ACCESS_TOKEN_EXPIRE_TIME
     }
 )
-    
 }
-
-
 
 userSchema.method.generateRefreshToken = function(){
     return jwt.sign(
@@ -95,9 +90,5 @@ userSchema.method.generateRefreshToken = function(){
     }
 )
 }
-
-
-
-
 
 export const User = mongoose.model("User", userSchema)
