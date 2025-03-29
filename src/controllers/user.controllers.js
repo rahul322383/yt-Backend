@@ -296,6 +296,73 @@ const updateUserCoverImage = asyncHandler(async(req,res)=>{
     )
 })
 
+const getUserChannel = asyncHandler(async(req,res)=>{
+    const {username} = req.params
+
+
+    if(!username?.trim()){
+        throw new ApiError(400, "Username is required")
+    }
+  const channel =await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        {
+            $lookup:{
+                from: "subscribes",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscriberTO"
+            }
+        },
+        {
+            $addFields:{
+                subscribersCount: { $size: "$subscribers" },
+                channelIsSubscribedToCount: { $size: "$subscriberTO" },
+                videosCount: { $size: "$subscriberTO" },
+                channelIsSubscribedTo: {
+                    $cond: {
+                        if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+
+        },
+    
+        {
+            $project:{
+                fullname: 1,
+                username: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1,
+                channelIsSubscribedTo: 1,
+                channelIsSubscribedToCount: 1,
+                subscribersCount: { $size: "$subscribers" },
+                videosCount:{ $size:"$videos"}
+            }
+        }
+    ])
+    if(!channel?.length){
+        throw new ApiError(404, "channel not found")
+    }
+    return res.status(200).json(
+        new ApiResponse(200, channel[0], "User channel fetched successfully")
+    )
+    
+})
 
 
 
@@ -310,7 +377,8 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannel
 
 }
 
