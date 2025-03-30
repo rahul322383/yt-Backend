@@ -17,4 +17,16 @@ app.use(cookieParser())
 import userRouter from "./routes/user.routes.js"
 
 app.use("/api/v1/users",userRouter)
+
+/*app.get("/api/message", (req, res) => {
+    res.json({ message: "Hello from the backend!" });
+});
+
+app.listen(8000, () => {
+    console.log("Server running on http://localhost:8000");
+})  */
+
+
+
+
 export {app}
