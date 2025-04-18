@@ -1,5 +1,4 @@
 import mangoose, { Schema } from 'mongoose';
-
 const subscriptionSchema = new Schema({
     subscriber: {
          type: Schema.Types.ObjectId, ref: 'User'
@@ -12,9 +11,4 @@ const subscriptionSchema = new Schema({
 },
 { timestamps: true });
 
-
-
-
-
-
-export const subscription = mangoose.model('subscription', subscriptionSchema);
+export const Subscription = mangoose.model('subscription', subscriptionSchema);

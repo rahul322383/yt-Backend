@@ -1,53 +1,69 @@
-import mongoose,{Schema} from "mongoose";
+import mongoose, { Schema } from "mongoose";
 import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
+import { v4 as uuidv4 } from "uuid";
 
+const videoSchema = new mongoose.Schema(
+  {
+    videoId: {
+      type: String,
+      default: () => uuidv4(),
+      unique: true,
+    },
+    playlistId: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Playlist",
+      },
+    ],
+    title: {
+      type: String,
+      required: [true, "Video title is required"],
+    },
+    description: {
+      type: String,
+    },
+    videoUrl: {
+      type: String,
+      required: [false, "Video URL is required"],
+    },
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    isPublished: {
+      type: Boolean,
+      default: false,
+    },
+    comments: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Comment",
+      },
+    ],
+    views: {
+      type: Number,
+      default: 0,
+    },
+    tags: {
+      type: [String],
+      default: [],
+    },
+    duration: {
+      type: Number,
+    },
+    size: {
+      type: Number,
+    },
+    cloudinaryId: {
+      type: String,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
 
-const videoSchema = new Schema (
-    {
-        videoFile : {
-            type :String, // cloudinary url
-            required: true
-        },
-        thumbnail : {
-            type :String, // cloudinary url
-            required: true
-        },
-        title : {
-            type :String,
-            required: true
-        },
-        description : {
-            type :String,
-            required: true
-        },
-        duration : {
-            type :Number,
-            required: true
-        },
-        views : {
-            type :Number,
-            default: 0
-        },
-        likes : {
-            type :Number,
-            default: 0
-        },
-        ispublished : {
-            type :Boolean,
-            default: true
-        },
-        owner:{
-            type :Schema.Types.ObjectId,
-            ref : "User"
-        },
-        comments : [
-            {
-                type :Schema.Types.ObjectId,
-                ref : "Comment"
-            }
-        ],
-        timestamps: true
-    }
-)
-videoSchema.plugin(mongooseAggregatePaginate)
-export const Video = mongoose.model("Video", videoSchema)
+videoSchema.plugin(mongooseAggregatePaginate);
+
+export const Video = mongoose.model("Video", videoSchema);
