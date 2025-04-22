@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import {asyncHandler} from "../utils/asyncHandler.js";
 import { Video } from "../models/video.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
@@ -7,7 +5,6 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import mongoose from "mongoose";
 import { isValidObjectId } from "mongoose";
-
 import { Playlist } from "../models/playlist.model.js";
 import cloudinary from "../utils/cloudinary.config.js";
 import {Comment} from "../models/comment.model.js";
@@ -76,12 +73,12 @@ export const publishAVideo = asyncHandler(async (req, res) => {
 
   // Validation
   if (!title || !videoFile ) {
-    throw new ApiError(400, "Missing required fields are required");
+    return res.status(400).json(new ApiResponse(400, {}, "Invalid request"));
   }
   // Upload video and thumbnail
   const videoUpload = await uploadOnCloudinary(videoFile.path, "video");
   if (!videoUpload?.url) {
-    throw new ApiError(500, "Video upload failed");
+    return res.status(500).json(new ApiResponse(500, {}, "Video upload failed"));
   }
 
   // Create video document
@@ -102,51 +99,6 @@ export const publishAVideo = asyncHandler(async (req, res) => {
 });
 
 
-// 🔹 GET video by ID (videoId or _id)
-
-// export const getVideoById = asyncHandler(async (req, res) => {
-//   const { videoId } = req.params;
-
-
-//   // Fetch the video and populate related fields such as playlist and comments if necessary
-//   const fetchVideo = await Video.findOne({ videoId })
-//     .populate("playlistId")   
-//     .populate("comments")     
-//     .select("videoId playlistId title description views comments url createdAt updatedAt"); // You can customize the fields to include
-
-//   if (!fetchVideo) {
-//     throw new ApiError(404, "Video not found");
-//   }
-
-//   // Return detailed data about the video
-//   return res.status(200).json(
-//     new ApiResponse(200, fetchVideo, "Video fetched successfully")
-//   );
-// });
-
-// export const getVideoById = asyncHandler(async (req, res) => {
-//   const { videoId } = req.params;
-
-
-//   const playlist = await Playlist.findOne({ "videos.videoId": videoId });
-
-//   if (!playlist) {
-//     throw new ApiError(404, "Video not found");
-//   }
-
-//   const video = playlist.videos.find((v) => v.videoId === videoId);
-  
-
-//   if (!video) {
-//     throw new ApiError(404, "Video not found in playlist");
-//   }
-
-//   return res
-//     .status(200)
-//     .json(new ApiResponse(200, video, "Video fetched successfully"));
-// });
-
-
 
 export const getVideoById = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
@@ -154,12 +106,12 @@ export const getVideoById = asyncHandler(async (req, res) => {
   const playlist = await Playlist.findOne({ "videos.videoId": videoId });
 
   if (!playlist) {
-    throw new ApiError(404, "Video not found");
+    return res.status(404).json(new ApiResponse(404, {}, "Video not found"));
   }
 
   const video = playlist.videos.find((v) => v.videoId === videoId);
   if (!video) {
-    throw new ApiError(404, "Video not found in playlist");
+    return res.status(404).json(new ApiResponse(404, {}, "Video not found in playlist"));
   }
 
   // Increment view count (optional)
@@ -233,79 +185,13 @@ export const updateVideo = asyncHandler(async (req, res) => {
 
   const updated = await Video.findOneAndUpdate({ videoId }, updates, { new: true });
 
-  if (!updated) throw new ApiError(404, "Video not found");
+  if (!updated)
+    return res.status(404).json(new ApiResponse(404, {}, "Video not found"));
 
   return res
     .status(200)
     .json(new ApiResponse(200, updated, "Video updated successfully"));
 });
-
-// 🔹 DELETE video
-
-// export const deleteVideo = asyncHandler(async (req, res) => {
-//   const { videoId } = req.params;
- 
-
-//   // const deleted = await Video.findOneAndDelete({ videoId });
-//   const deleted = await Video.findByIdAndDelete(videoId); // Using Mongoose to find and delete
-//   console.log("Deleted video:", deleted);
-
-  
-
-//   if (!deleted) {
-//     return res.status(404).json({
-//       success: false,
-//       message: "Video not found",
-//     });
-//   }
-//   // await deleteOnCloudinary(deleted.cloudinaryId, "video");
-  
-
-//   return res
-//     .status(200)
-//     .json(new ApiResponse(200, null, "Video deleted successfully"));
-// });
-
-// 
-
-
-
-// export const deleteVideo = asyncHandler(async (req, res) => {
-//   const { videoId } = req.params;
-//   console.log("Deleting video with ID:", videoId);
-
-//   // 1. Delete from Video collection
-//   const deleted = await Video.findOneAndDelete({ videoId });
-//   console.log("Deleted video:", deleted);
-
-//   if (!deleted) {
-//     return res.status(404).json({
-//       success: false,
-//       message: "Video not found",
-//     });
-//   }
-
-//   // 2. Remove embedded video from all playlists
-//   await Playlist.updateMany(
-//     {},
-//     {
-//       $pull: {
-//         videos: { videoId: deleted.videoId },
-//       },
-//     }
-//   );
-
-//   // 3. Delete from Cloudinary
-//   if (deleted.cloudinaryId) {
-//     await deleteOnCloudinary(deleted.cloudinaryId, "video");
-//   }
-
-//   return res
-//     .status(200)
-//     .json(new ApiResponse(200, null, "Video deleted successfully and removed from playlists"));
-// });
-
-
 
 
 // 🔹 TOGGLE publish status
@@ -314,8 +200,8 @@ export const togglePublishStatus = asyncHandler(async (req, res) => {
 
   const video = await Video.findById( videoId );
 
-  if (!video) throw new ApiError(404, "Video not found");
-
+  if (!video) 
+    return res.status(404).json(new ApiResponse(404, {}, "Video not found"));
   video.status = video.status === "published" ? "unpublished" : "published";
   await video.save();
 
@@ -334,7 +220,6 @@ const extractCloudinaryPublicId = (url) => {
     const publicId = `${version}/${fileName.split('.')[0]}`; // e.g., v1744729768/rz7vtufjvcvzwtlxmdje
     return publicId;
   } catch (error) {
-    console.error("Error extracting publicId:", error);
     return null;
   }
 };
@@ -342,12 +227,8 @@ const extractCloudinaryPublicId = (url) => {
 export const deleteVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
 
-  console.log("🔴 Deleting video with ID:", videoId);
-
   // 1. Delete from MongoDB (Video collection)
   const deletedVideo = await Video.findByIdAndDelete(videoId);
-  console.log("Deleted video:", deletedVideo);
-
   if (!deletedVideo) {
     return res.status(404).json({
       success: false,
@@ -375,7 +256,6 @@ export const deleteVideo = asyncHandler(async (req, res) => {
     await cloudinary.uploader.destroy(cloudinaryId, {
       resource_type: "video",
     });
-    console.log("✅ Deleted from Cloudinary:", cloudinaryId);
   } else {
     console.warn("⚠ Cloudinary ID not found, skipping cloud deletion.");
   }
@@ -392,7 +272,7 @@ export const getAndTrackVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
 
   if (!isValidObjectId(videoId)) {
-    throw new ApiError(400, "Invalid video ID");
+    return res.status(400).json(new ApiResponse(400, {}, "The provided video ID is invalid. Please provide a valid MongoDB ObjectId."));
   }
 
   const video = await Video.findByIdAndUpdate(
@@ -402,7 +282,10 @@ export const getAndTrackVideo = asyncHandler(async (req, res) => {
   )
     .populate("owner", "username avatar");
 
-  if (!video) throw new ApiError(404, "Video not found");
-
+    if (!video) {
+      return res.status(404).json(
+        new ApiResponse(404, {}, "The video with the provided ID could not be found. Please ensure the ID is correct and exists.")
+      );
+    }
   return res.status(200).json(new ApiResponse(200, video, "Video fetched and view counted"));
 });

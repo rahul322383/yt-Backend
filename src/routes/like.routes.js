@@ -1,26 +1,3 @@
-// import express from "express";
-// import { toggleVideoLike, toggleCommentLike, toggleTweetLike, getLikedVideos } from "../controllers/like.controllers.js";
-// import { verifyJWT } from "../middleware/auth.middleware.js";
-
-// const router = express.Router();
-
-// // All routes are protected by JWT
-// router.use(verifyJWT);
-
-// // Toggle like for video, comment, and tweet
-// router.post("/:videoId/like", toggleVideoLike);
-// router.post("/:videoId/dislike", toggleVideoLike);
-// router.post("/comment/:commentId/like", toggleCommentLike);
-// router.post("/tweet/:tweetId/like", toggleTweetLike);
-
-// // Get all liked videos by user with pagination
-// router.get("/liked-videos", getLikedVideos);
-
-// export default router;
-
-
-
-
 import express from "express";
 import {
   likeVideo,
@@ -35,7 +12,7 @@ import {
   getAdminLikeStats
 } from "../controllers/like.controllers.js";
 import { verifyJWT } from "../middleware/auth.middleware.js";
-// import User from "../middleware/user.middleware.js";
+
 
 const router = express.Router();
 

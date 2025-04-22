@@ -10,7 +10,9 @@ const createTweet = asyncHandler(async (req, res) => {
     const { content, mediaUrl } = req.body;
 
     if (!content || !content.trim()) {
-        throw new ApiError(400, "Tweet content is required");
+        return res.status(400).json(
+            new ApiResponse(400, {}, "Tweet content is required")   
+        )
     }
 
     const tweet = await Tweet.create({
@@ -31,7 +33,9 @@ const getUserTweets = asyncHandler(async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
 
     if (!isValidObjectId(userId)) {
-        throw new ApiError(400, "Invalid user ID");
+        return res.status(400).json(
+            new ApiResponse(400, {}, "Invalid user ID")
+        )
     }
 
     const tweets = await Tweet.find({ owner: userId })
@@ -53,7 +57,9 @@ const updateTweet = asyncHandler(async (req, res) => {
     const { content, mediaUrl } = req.body;
 
     if (!isValidObjectId(tweetId)) {
-        throw new ApiError(400, "Invalid tweet ID");
+        return res.status(400).json(
+            new ApiResponse(400, {}, "Invalid tweet ID")
+        )
     }
 
     const updatedData = {};
@@ -67,7 +73,9 @@ const updateTweet = asyncHandler(async (req, res) => {
     );
 
     if (!tweet) {
-        throw new ApiError(404, "Tweet not found or unauthorized");
+        return res.status(404).json(
+            new ApiResponse(404, {}, "Tweet not found or unauthorized")
+        )
     }
 
     return res.status(200).json(
@@ -80,7 +88,9 @@ const deleteTweet = asyncHandler(async (req, res) => {
     const { tweetId } = req.params;
 
     if (!isValidObjectId(tweetId)) {
-        throw new ApiError(400, "Invalid tweet ID");
+        return res.status(400).json(
+            new ApiResponse(400, {}, "Invalid tweet ID")
+        )
     }
 
     const tweet = await Tweet.findOneAndDelete({
@@ -89,7 +99,9 @@ const deleteTweet = asyncHandler(async (req, res) => {
     });
 
     if (!tweet) {
-        throw new ApiError(404, "Tweet not found or unauthorized");
+        return res.status(404).json(
+            new ApiResponse(404, {}, "Tweet not found or unauthorized")
+        )
     }
 
     return res.status(200).json(
@@ -104,12 +116,16 @@ const toggleTweetLike = asyncHandler(async (req, res) => {
     const { tweetId } = req.params;
 
     if (!isValidObjectId(tweetId)) {
-        throw new ApiError(400, "Invalid tweet ID");
+        return res.status(400).json(
+            new ApiResponse(400, {}, "Invalid tweet ID")
+        )
     }
 
     const tweet = await Tweet.findById(tweetId);
     if (!tweet) {
-        throw new ApiError(404, "Tweet not found");
+        return res.status(404).json(
+            new ApiResponse(404, {}, "Tweet not found")
+        )
     }
 
     const existing = await Like.findOne({
@@ -143,7 +159,9 @@ const getTweetLikes = asyncHandler(async (req, res) => {
     const { tweetId } = req.params;
 
     if (!isValidObjectId(tweetId)) {
-        throw new ApiError(400, "Invalid tweet ID");
+        return res.status(400).json(
+            new ApiResponse(400, {}, "Invalid tweet ID")
+        )
     }
 
     const likeCount = await Like.countDocuments({ tweet: tweetId });

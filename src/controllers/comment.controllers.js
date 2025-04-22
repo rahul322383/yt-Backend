@@ -4,16 +4,21 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
+// 📥 Helper function to validate MongoDB ObjectId
+const validateObjectId = (id, type = "Object") => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, `${type} ID is invalid`);
+  }
+};
+
 // 📥 Add a comment to a video
 const addComment = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   const { content } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(videoId)) {
-    throw new ApiError(400, "Invalid video ID");
-  }
+  validateObjectId(videoId, "Video");
 
-  if (!content || content.trim() === "") {
+  if (!content?.trim()) {
     throw new ApiError(400, "Comment content is required");
   }
 
@@ -22,46 +27,67 @@ const addComment = asyncHandler(async (req, res) => {
     owner: req.user._id,
     video: videoId,
   });
+  console.log(newComment);
 
-  return res
-    .status(201)
-    .json(new ApiResponse(201, newComment, "Comment added successfully"));
+  return res.status(201).json(new ApiResponse(201, newComment, "Comment added successfully"));
 });
-
 
 // 📄 Get all comments on a video (paginated)
 const getVideoComments = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
-  const { page = 1, limit = 10 } = req.query;
+  const page = Math.max(1, parseInt(req.query.page)) || 1;
+  const limit = Math.max(1, parseInt(req.query.limit)) || 10;
 
-  // Validate videoId
-  if (!mongoose.Types.ObjectId.isValid(videoId)) {
-    throw new ApiError(400, "Invalid video ID");
-  }
+  validateObjectId(videoId, "Video");
 
-  // Fetch comments, populate the 'owner' (user), and paginate
-  const comments = await Comment.find({ video: videoId })
-    .populate("owner", "username avatar") // Corrected field name here
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(Number(limit));
+  // Optimized pagination using aggregation
+  const [commentsData] = await Comment.aggregate([
+    { $match: { video: mongoose.Types.ObjectId(videoId) } },
+    {
+      $lookup: {
+        from: "users", 
+        localField: "owner", 
+        foreignField: "_id", 
+        as: "ownerDetails"
+      },
+    },
+    { $unwind: "$ownerDetails" },
+    { $sort: { createdAt: -1 } },
+    { $skip: (page - 1) * limit },
+    { $limit: limit },
+    {
+      $project: {
+        content: 1,
+        createdAt: 1,
+        "ownerDetails.username": 1,
+        "ownerDetails.avatar": 1,
+      },
+    },
+  ]);
 
-  // Count total comments for the pagination info
   const totalComments = await Comment.countDocuments({ video: videoId });
+  const totalPages = Math.ceil(totalComments / limit);
 
   return res.status(200).json(
-    new ApiResponse(200, { comments, totalComments }, "Comments retrieved successfully")
+    new ApiResponse(200, {
+      comments: commentsData,
+      totalComments,
+      page,
+      limit,
+      totalPages,
+    }, "Comments retrieved successfully")
   );
 });
-
 
 // ✏️ Update a comment
 const updateComment = asyncHandler(async (req, res) => {
   const { commentId } = req.params;
   const { content } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(commentId)) {
-    throw new ApiError(400, "Invalid comment ID");
+  validateObjectId(commentId, "Comment");
+
+  if (!content?.trim()) {
+    throw new ApiError(400, "Comment content cannot be empty");
   }
 
   const comment = await Comment.findById(commentId);
@@ -69,17 +95,11 @@ const updateComment = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Comment not found");
   }
 
-  // Authorization check
-  if (comment.owner.toString() !== req.user._id.toString()) {
+  if (!comment.owner.equals(req.user._id) && req.user.role !== "admin") {
     throw new ApiError(403, "You are not authorized to edit this comment");
   }
 
-  // Content validation
-  if (!content || content.trim() === "") {
-    throw new ApiError(400, "Comment content cannot be empty");
-  }
-
-  comment.content = content;
+  comment.content = content.trim();
   await comment.save();
 
   return res.status(200).json(
@@ -87,23 +107,18 @@ const updateComment = asyncHandler(async (req, res) => {
   );
 });
 
-
-
 // ❌ Delete a comment
 const deleteComment = asyncHandler(async (req, res) => {
   const { commentId } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(commentId)) {
-    throw new ApiError(400, "Invalid comment ID");
-  }
+  validateObjectId(commentId, "Comment");
 
   const comment = await Comment.findById(commentId);
   if (!comment) {
     throw new ApiError(404, "Comment not found");
   }
 
-  // Check if the user is the comment owner or admin
-  const isOwner = comment.owner.toString() === req.user._id.toString(); // Corrected field name here
+  const isOwner = comment.owner.equals(req.user._id);
   const isAdmin = req.user.role === "admin";
 
   if (!isOwner && !isAdmin) {
@@ -114,7 +129,6 @@ const deleteComment = asyncHandler(async (req, res) => {
 
   return res.status(200).json(new ApiResponse(200, null, "Comment deleted successfully"));
 });
-
 
 export {
   addComment,

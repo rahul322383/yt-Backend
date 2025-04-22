@@ -1,4 +1,3 @@
-
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -20,7 +19,9 @@ import playlistRouter from "./routes/playlist.routes.js";
 import dashboardRouter from "./routes/dashboard.routes.js";
 import analyticsRouter from "./routes/analytics.routes.js";
 import settingRouter from "./routes/settings.routes.js";
-// import { sendMail } from "./utils/sendMail.js";
+import emailRouter  from "./routes/email.routes.js";
+import adminRouter from "./routes/admin.routes.js"; 
+import authrouter from "./routes/auth.Routes.js"
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ✅ Routes
+app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/users/tweets", tweetRouter);
 app.use("/api/v1/users/subscribe", subscriptionRouter);
@@ -68,8 +70,9 @@ app.use("/api/v1/users/playlist", playlistRouter);
 app.use("/api/v1/users/dashboard", dashboardRouter);
 app.use("/api/v1/users/analytics", analyticsRouter);
 app.use("/api/v1/users/settings", settingRouter);
-app.use("/api/v1/users/comments", commentRouter);
-// app.use("/api/v1/users/sendMail", sendMailRouter);
+app.use("/api/v1/users/videos", commentRouter);
+app.use("/api/v1/users/sendEmail", emailRouter);
+app.use("/api/v1/admin", authrouter);
 
 // ✅ Root
 app.get("/", (req, res) => {

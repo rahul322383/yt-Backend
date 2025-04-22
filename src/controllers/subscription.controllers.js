@@ -9,11 +9,11 @@ const toggleSubscription = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
 
   if (!isValidObjectId(channelId)) {
-    throw new ApiError(400, "Invalid channel ID");
+    return res.status(400).json(new ApiError(400, "Invalid channel ID"));
   }
 
   if (req.user._id.toString() === channelId) {
-    throw new ApiError(400, "You cannot subscribe to yourself");
+    return res.status(400).json(new ApiError(400, "You cannot subscribe to yourself"));
   }
 
   const existingSubscription = await Subscription.findOne({
@@ -43,7 +43,7 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
 
   if (!isValidObjectId(channelId)) {
-    throw new ApiError(400, "Invalid channel ID");
+    return res.status(400).json(new ApiError(400, "Invalid channel ID"));
   }
 
   const subscribers = await Subscription.find({ channel: channelId })
@@ -67,7 +67,7 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
   const { subscriberId } = req.params;
 
   if (!isValidObjectId(subscriberId)) {
-    throw new ApiError(400, "Invalid subscriber ID");
+    return res.status(400).json(new ApiError(400, "Invalid subscriber ID"));
   }
 
   const subscriptions = await Subscription.find({ subscriber: subscriberId })

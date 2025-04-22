@@ -7,16 +7,8 @@ import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import zxcvbn from 'zxcvbn';
-import nodemailer from 'nodemailer';
 import crypto from 'crypto';
-// import fs from 'fs';
 import {v2 as cloudinary} from 'cloudinary';
-import streamifier from 'streamifier';
-// import unlinkAsync from 'util/promisify';
-import {promisify} from 'util';
-// const unlinkAsync = promisify(fs.unlink);
-import fs from 'fs/promises';
-// import cloudinary from '../utils/cloudinary.config.js';
 
 
 
@@ -26,8 +18,12 @@ const generateAccessTokenAndRefreshToken = async (userId) => {
   if (!user) throw new ApiError(404, "User not found");
 
   if (typeof user.generateAccessToken !== "function" || typeof user.generateRefreshToken !== "function") {
-    throw new ApiError(500, "Token generation methods missing in User model");
+    return res.status(500).json({
+      success: false,
+      message: "Token generation methods are missing in User model",
+    });
   }
+  
 
   const accessToken = user.generateAccessToken();
   const refreshToken = user.generateRefreshToken();
@@ -48,17 +44,18 @@ const registerUser = asyncHandler(async (req, res) => {
       signupType = "email", // "email" | "google" | "github" | "facebook"
       providerId, // unique ID from Google/GitHub/Facebook
       avatarUrl, // optional avatar URL from OAuth provider
+      coverUrl,
       ...rest
     } = req.body;
 
     // Basic validations
     if (signupType === "email") {
       if ([fullName, email, username, password].some(field => !field?.trim())) {
-        throw new ApiError(400, "All required fields must be provided for email signup");
+        return res.status(400).json(new ApiResponse(400, null, "Missing required fields"));
       }
     } else {
       if (!email || !providerId || !signupType) {
-        throw new ApiError(400, "Missing required fields for social signup");
+        return res.status(400).json(new ApiResponse(400, null, "Missing required fields"));
       }
     }
 
@@ -99,14 +96,23 @@ const registerUser = asyncHandler(async (req, res) => {
       avatarUpload = await uploadOnCloudinary(avatarLocalPath);
     }
     
-
-    const coverUpload = coverImageLocalPath
-      ? await uploadOnCloudinary(coverImageLocalPath)
-      : null;
-
-    if (signupType === "email" && !avatarUpload?.url) {
-      throw new ApiError(400, "Avatar is required for email signup");
+    let coverUpload = null;
+    if (coverImageLocalPath) {
+      coverUpload = await uploadOnCloudinary(coverImageLocalPath);
     }
+
+    // let coverUpload = coverImageLocalPath
+    //   ? await uploadOnCloudinary(coverImageLocalPath)
+    //   : null;
+      
+
+      if (signupType === "email" && !avatarUpload?.url) {
+        return res.status(400).json({
+          success: false,
+          message: "Avatar is required for email signup",
+        });
+      }
+      
 
     // 👤 Create user
     const newUser = await User.create({
@@ -122,7 +128,11 @@ const registerUser = asyncHandler(async (req, res) => {
     });
 
     if (!newUser) {
-      throw new ApiError(500, "User creation failed");
+      return res.status(500).json({
+        success: false,
+        message: "User creation failed",
+      });
+      
     }
 
     // 🔐 Generate tokens
@@ -151,8 +161,6 @@ const registerUser = asyncHandler(async (req, res) => {
 
     // ✅ Return created user (without password and refreshToken)
     const createdUser = await User.findById(newUser._id).select("-password -refreshToken");
-    // const createdUser = await User.findById(newUser.username).select("-password -refreshToken");
-
     return res.status(201).json(
       new ApiResponse(201, {
         user: createdUser,
@@ -166,57 +174,76 @@ const registerUser = asyncHandler(async (req, res) => {
     // Handle MongoDB duplicate key error (fallback)
     if (error.code === 11000) {
       const duplicateField = Object.keys(error.keyValue)[0];
-      return res.status(409).json(
-        new ApiResponse(409, null, `${duplicateField} is already in use`)
-      );
+      return res
+      .status(409)
+      .json(new ApiResponse(409, null, `${duplicateField} is already in use`));
+
     }
 
     return res.status(error.statusCode || 500).json(
-      new ApiResponse(error.statusCode || 500, null, error.message || "Internal Server Error")
+      new ApiResponse(
+        error.statusCode || 500,
+        null,
+        error.message || "Internal Server Error"
+      )
     );
+    
   }
 });
 
 
 // LOGIN
-const loginUser = asyncHandler(async (req, res) => {
-  const { username, email, password } = req.body;
+// const loginUser = asyncHandler(async (req, res) => {
+//   const { username, email, password } = req.body;
+//   console.log ("req.body", req.body);
+
+
+//   if (!password || (!username && !email)) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Username/email and password are required",
+//     });
+    
+//   }
+//   console.log(username, email, password);
+
+//   const user = await User.findOne({
+//     $or: [{ username }, { email }],
+//   });
+//   console.log(user);
+
+//   if (!user || !(await user.isPasswordCorrect(password))) {
+//      return res.status(500)
+//      .json({
+//       success: false,
+//       message: "Invalid credentials",
+//     })
+//   }
+//   // 🔐 Generate tokens
+//   const { accessToken, refreshToken } = await generateAccessTokenAndRefreshToken(user._id);
+
+//   const isProd = process.env.NODE_ENV === "production";
+//   const cookieOptions = {
+//     httpOnly: true,
+//     secure: isProd,
+//     sameSite: isProd ? "None" : "Lax",
+//   };
+
+//   res
+//     .cookie("accessToken", accessToken, { ...cookieOptions, maxAge: 24 * 60 * 60 * 1000 })
+//     .cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000, path: "/" });
+
+//   const safeUser = await User.findById(user._id).select("-password -refreshToken");
+
+//   return res.status(200).json(new ApiResponse(200, {
+//     user: safeUser,
+//     accessToken,
+//     refreshToken,
+//   }, "User logged in successfully"));
+// });
 
 
 
-  if (!password || (!username && !email)) {
-    throw new ApiError(400, "Username/email and password are required");
-  }
-
-  const user = await User.findOne({
-    $or: [{ username }, { email }],
-  });
-
-  if (!user || !(await user.isPasswordCorrect(password))) {
-    throw new ApiError(401, "Invalid credentials");
-  }
-
-  const { accessToken, refreshToken } = await generateAccessTokenAndRefreshToken(user._id);
-
-  const isProd = process.env.NODE_ENV === "production";
-  const cookieOptions = {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? "None" : "Lax",
-  };
-
-  res
-    .cookie("accessToken", accessToken, { ...cookieOptions, maxAge: 24 * 60 * 60 * 1000 })
-    .cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000, path: "/" });
-
-  const safeUser = await User.findById(user._id).select("-password -refreshToken");
-
-  return res.status(200).json(new ApiResponse(200, {
-    user: safeUser,
-    accessToken,
-    refreshToken,
-  }, "User logged in successfully"));
-});
 
 
 const socialLogin = async (req, res) => {
@@ -224,7 +251,7 @@ const socialLogin = async (req, res) => {
 
   try {
     if (!token || !provider) {
-      throw new ApiError(400, "Token and provider are required");
+      return res.status(400).json({ success: false, message: "Token and provider are required" });
     }
 
     let userData = null;
@@ -262,11 +289,14 @@ const socialLogin = async (req, res) => {
         avatar: picture?.data?.url || "default-avatar-url"
       };
     } else {
-      throw new ApiError(400, "Unsupported provider");
+      return res.status(400).json({ success: false, message: "Unsupported provider" });
     }
 
     if (!userData?.email) {
-      throw new ApiError(400, "Email is required from provider");
+      return res.status(400).json({
+        success: false,
+        message: "Email is required from provider",
+      });
     }
 
     // 🔸 Check for existing user
@@ -348,7 +378,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
   
   if (!incomingRefreshToken) {
-    throw new ApiError(400, "Refresh token is required");
+    return res.status(400).json({ success: false, message: "Refresh token is required" });
   }
 
   try {
@@ -359,12 +389,12 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     const user = await User.findById(decodedToken?._id);
     
     if (!user) {
-      throw new ApiError(404, "User not found || Invalid token");
+      return res.status(404).json({ success: false, message: "User not found || Invalid token" });
     }
     
     // Check if the refresh token matches the one stored for the user
     if (!user.refreshToken || incomingRefreshToken !== user.refreshToken) {
-      throw new ApiError(401, "Invalid or expired refresh token");
+      return res.status(401).json({ success: false, message: "Invalid or expired refresh token" });
     }
 
     // Generate new access and refresh tokens
@@ -397,77 +427,16 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
 
 
-const changecurrentPassword = asyncHandler(async (req, res) => {
-  const { username, email, currentPassword, newPassword} = req.body;
-
-  const user = await User.findById(req.user._id);
-  if (!user) throw new ApiError(404, "User not found");
-
-  const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
-  if (!isPasswordCorrect) throw new ApiError(401, "Current password is incorrect");
-
-  if (await bcrypt.compare(newPassword, user.password)) {
-    throw new ApiError(400, "New password cannot be the same as the current password");
-  }
-
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-  if (!passwordRegex.test(newPassword)) {
-    throw new ApiError(400, "Password must include an uppercase, lowercase, number, and special character and be at least 8 characters");
-  }
-
-  const passwordScore = zxcvbn(newPassword).score;
-  if (passwordScore > 5) {//after testing we can change this
-    throw new ApiError(400, "Password is too weak. Try something more secure.");
-  }
-
-  if (!username || !email) {
-    throw new ApiError(400, "Username or email must be provided");
-  }
-
-  const salt = await bcrypt.genSalt(12);
-  user.password = await bcrypt.hash(newPassword, salt);
-
-  await user.save({ validateBeforeSave: false });
-
-  return res.status(200).json(new ApiResponse(200, user, "Password changed successfully"));
-});
-
 const getCurrentUser = asyncHandler(async (req, res) => {
   if (!req.user) {
-    throw new ApiError(401, "Unauthorized: User not found in request");
+    return res.status(401).json({ success: false, message: "Unauthorized: User not found in request" });
   }
 
   return res.status(200).json(
     new ApiResponse(200, req.user, "User fetched successfully")
+    
   );
 });
-
-
-
-
-// const updateAccountDetails = asyncHandler(async (req, res) => {
-//     const { fullName, email } = req.body;
-  
-//     if (!fullName || !email) {
-//       throw new ApiError(400, "All fields are required");
-//     }
-  
-//     const user = await User.findByIdAndUpdate(
-//       req.user._id,
-//       {
-//         $set: {
-//           fullName,
-//           email: email.toLowerCase(),
-//         },
-//       },
-//       { new: true }
-//     ).select("-password -refreshToken");
-  
-//     return res.status(200).json(
-//       new ApiResponse(200, user, "User details updated successfully")
-//     );
-// });
-
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
   const updates = {};
@@ -506,7 +475,6 @@ const forgetPassword = async (req, res) => {
     }
 
     const user = await User.findOne({ email });
-
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -587,20 +555,16 @@ const verifyOtp = async (req, res) => {
 };
 
 
-
-
-
  const updateUserAvatar = asyncHandler(async (req, res) => {
   const avatarLocalPath = req.file?.path;
 
   if (!avatarLocalPath) {
-    throw new ApiError(400, "Avatar file is missing");
+    return res.status(400).json({ success: false, message: "Avatar file is missing" });
   }
 
   const user = await User.findById(req.user?._id);
-
   if (!user) {
-    throw new ApiError(404, "User not found");//give better message for user not found
+    throw new ApiError(404, "The user with the provided details could not be found. Please check the information and try again.");
   }
 
   // 🔥 Step 1: Delete old avatar from Cloudinary (if exists)
@@ -612,7 +576,7 @@ const verifyOtp = async (req, res) => {
 
       await cloudinary.uploader.destroy(publicId);
     } catch (err) {
-      console.warn("⚠️ Failed to delete old avatar:", err.message);
+      return res.status(400).json({ success: false, message: "Error while deleting old avatar" });
     }
   }
 
@@ -620,7 +584,7 @@ const verifyOtp = async (req, res) => {
   const avatar = await uploadOnCloudinary(avatarLocalPath);
 
   if (!avatar.url) {
-    throw new ApiError(400, "Error while uploading avatar");
+    return res.status(400).json({ success: false, message: "Error while uploading avatar" });
   }
 
   // ✅ Step 3: Save new avatar URL in DB
@@ -633,7 +597,7 @@ const verifyOtp = async (req, res) => {
     await fs.unlinkAsync(avatarLocalPath); // Delete it
   } catch (err) {
     if (err.code !== "ENOENT") {
-      console.warn("⚠️ Failed to delete local file:", err.message);
+      return res.status(400).json({ success: false, message: "Error while deleting local file" });
     }
   }
   
@@ -646,35 +610,53 @@ const verifyOtp = async (req, res) => {
 
   
 const updateUserCoverImage = asyncHandler(async (req, res) => {
+  try {
     const coverImageLocalPath = req.file?.path;
-  
+
     if (!coverImageLocalPath) {
-      throw new ApiError(400, "Image is required");
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, "Cover image file is required"));
     }
-  
+
     const uploaded = await uploadOnCloudinary(coverImageLocalPath);
     const imageUrl = uploaded?.secure_url || uploaded?.url;
-  
+
     if (!imageUrl) {
-      throw new ApiError(500, "Error while uploading cover image");
+      return res
+        .status(500)
+        .json(new ApiResponse(500, null, "Failed to upload cover image"));
     }
-  
+
     const user = await User.findByIdAndUpdate(
-      req.user._id,
+      req.user?._id,
       { $set: { coverImage: imageUrl } },
       { new: true }
     ).select("-password -refreshToken");
-  
-    return res.status(200).json(
-      new ApiResponse(200, user, "Cover image updated successfully")
-    );
-  });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json(new ApiResponse(404, null, "User not found"));
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, user, "Cover image updated successfully"));
+  } catch (error) {
+    console.error("Cover image upload error:", error);
+    return res
+      .status(500)
+      .json(new ApiResponse(500, null, "Internal server error"));
+  }
+});
+
 
   const getUserChannel = asyncHandler(async (req, res) => {
     const { username } = req.params;
   
     if (!username?.trim()) {
-      throw new ApiError(400, "Username is required");
+      return res.status(400).json({ success: false, message: "Username is required" }); 
     }
   
     const channel = await User.aggregate([
@@ -749,7 +731,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     ]);
   
     if (!channel?.length) {
-      throw new ApiError(404, "Channel not found");
+      return res.status(404).json({ success: false, message: "Channel not found" });
     }
   
     return res.status(200).json(
@@ -765,7 +747,7 @@ const getUserChannelById = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
 
   if (!channelId?.trim()) {
-    throw new ApiError(400, "Channel ID is required");
+    return res.status(400).json({ success: false, message: "Channel ID is required" });
   }
 
   const channel = await User.aggregate([
@@ -812,7 +794,7 @@ const getUserChannelById = asyncHandler(async (req, res) => {
   ]);
 
   if (!channel?.length) {
-    throw new ApiError(404, "Channel not found");
+    return res.status(404).json({ success: false, message: "Channel not found" });
   }
 
   return res.status(200).json(
@@ -827,12 +809,12 @@ const getPlaylistById = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
 
   if (!isValidObjectId(playlistId)) {
-      throw new ApiError(400, "Invalid playlist ID");
+    throw new ApiError(400, "The provided playlist ID is invalid. Please check and try again.");
   }
-
+  
   const playlist = await playlist.findById(playlistId).populate("videos");
   if (!playlist) {
-      throw new ApiError(404, "Playlist not found");
+    throw new ApiError(404, "The playlist with the specified ID could not be found. Please ensure the ID is correct.");
   }
 
   res.status(200).json(new ApiResponse(200, playlist, "Playlist fetched successfully"));
@@ -841,63 +823,374 @@ const getPlaylistById = asyncHandler(async (req, res) => {
 
 //first track user based on user id
 //first get all videos  after that show all videos in watchHistory
-const getwatchHistory = asyncHandler(async(req,res)=>{
+const getwatchHistory = asyncHandler(async (req, res) => {
+  try {
+    // Step 1: Track user based on user ID (the user ID is fetched from req.user)
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
 
-    const user =await User.aggregate([
-        {
-            $match: {
-                _id: new mongoose.Types.ObjectId(req.user?._id)
-            }
+    // Step 2: Get all videos the user has watched (via watchHistory array in the User document)
+    const user = await User.aggregate([
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(userId),
         },
-        {
-            $lookup:{
-                from: "videos",
-                localField: "watchHistory",
+      },
+      {
+        $lookup: {
+          from: "videos",
+          localField: "watchHistory", // watchHistory stores video IDs
+          foreignField: "_id",
+          as: "watchHistory", // This will store the fetched videos
+          pipeline: [
+            {
+              $lookup: {
+                from: "users",
+                localField: "owner", // Get the user who owns the video
                 foreignField: "_id",
-                as: "watchHistory",
+                as: "owner",
                 pipeline: [
-                    {
-                        $lookup:{
-                            from: "users",
-                            localField: "owner",
-                            foreignField: "_id",
-                            as: "owner",
-                            pipeline: [
-                                {
-                                    $project:{
-                                        fullname: 1,
-                                        username: 1,
-                                        avatar: 1,
-                                    }
-                                },
-                                
-                            ]
-
-                        }
+                  {
+                    $project: {
+                      fullname: 1,
+                      username: 1,
+                      avatar: 1,
                     },
-                    {                    
-                    $addFields: {
-                        owner: {
-                             $arrayElemAt: ["$owner", 0] }
-                        }
-                        
-                    },
-                    
-                    
-                ]
-            }
+                  },
+                ],
+              },
+            },
+            {
+              $addFields: {
+                owner: { $arrayElemAt: ["$owner", 0] }, // Flatten the owner array to access the data
+              },
+            },
+          ],
         },
-        {
-            $project:{
-                watchHistory: 1
-            }
-        }
-    ])
+      },
+      {
+        $project: {
+          watchHistory: 1, // Include only the watchHistory field
+        },
+      },
+    ]);
 
+    // Check if user is found and has watch history
+    if (!user || user.length === 0 || !user[0].watchHistory) {
+      return res.status(404).json({
+        success: false,
+        message: "No watch history found for this user",
+      });
+    }
+
+    // Step 3: Return the watch history
     return res.status(200).json(
-        new ApiResponse(200, user[0]?.watchHistory, "Watch history fetched successfully")
-    )
-})  
+      new ApiResponse(200, user[0].watchHistory, "Watch history fetched successfully")
+    );
+  } catch (error) {
+    // Error handling
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+// const getwatchHistory = asyncHandler(async(req,res)=>{
+
+//     const user =await User.aggregate([
+//         {
+//             $match: {
+//                 _id: new mongoose.Types.ObjectId(req.user?._id)
+//             }
+//         },
+//         {
+//             $lookup:{
+//                 from: "videos",
+//                 localField: "watchHistory",
+//                 foreignField: "_id",
+//                 as: "watchHistory",
+//                 pipeline: [
+//                     {
+//                         $lookup:{
+//                             from: "users",
+//                             localField: "owner",
+//                             foreignField: "_id",
+//                             as: "owner",
+//                             pipeline: [
+//                                 {
+//                                     $project:{
+//                                         fullname: 1,
+//                                         username: 1,
+//                                         avatar: 1,
+//                                     }
+//                                 },
+                                
+//                             ]
+
+//                         }
+//                     },
+//                     {                    
+//                     $addFields: {
+//                         owner: {
+//                              $arrayElemAt: ["$owner", 0] }
+//                         }
+                        
+//                     },
+                    
+                    
+//                 ]
+//             }
+//         },
+//         {
+//             $project:{
+//                 watchHistory: 1
+//             }
+//         }
+//     ])
+
+//     return res.status(200).json(
+//         new ApiResponse(200, user[0]?.watchHistory, "Watch history fetched successfully")
+//     )
+// })  
+
+
+
+
+// import sendEmail from '../utils/SendEmail.js';
+
+
+// const generateResetLink = (email) => {
+//   const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '1h' });
+//   return `http://localhost:5173/reset-password/${token}`; // Adjust to your frontend URL
+// };
+
+// const forgotPassword = async (req, res) => {
+//   const { email } = req.body;
+
+//   if (!email) {
+//     return res.status(400).send("Email is required.");
+//   }
+
+//   try {
+//     // Check if the email exists in the database
+//     const user = await User.findOne({ email });
+//     if (!user) {
+//       return res.status(404).send("User with this email does not exist.");
+//     }
+
+//     // Generate the reset link
+//     const resetLink = generateResetLink(email);
+//     const subject = "🔐 Password Reset Request";
+//     const html = `
+//       <p>Hi,</p>
+//       <p>You requested a password reset. Click the link below to reset your password:</p>
+//       <p><a href="${resetLink}">Reset Password</a></p>
+//       <p>This link will expire in 1 hour.</p>
+//       <p>If you did not request this, please ignore this email.</p>
+//     `;
+
+//     // Send the reset email
+//     await sendEmail(email, subject, html);
+
+//     // Respond with success message
+//     res.status(200).send("Password reset email sent.");
+//   } catch (error) {
+//     console.error("Error:", error);
+//     res.status(500).send("Error sending email.");
+//   }
+// };
+
+// export { forgotPassword };
+
+
+
+
+
+
+const changecurrentPassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  const user = await User.findById(req.user._id).select("+password");
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "User not found",
+    });
+  }
+
+  const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
+  if (!isPasswordCorrect) {
+    return res.status(401).json({
+      success: false,
+      message: "Current password is incorrect",
+    });
+  }
+
+  if (await bcrypt.compare(newPassword, user.password)) {
+    return res.status(400).json({
+      success: false,
+      message: "New password cannot be the same as the current password",
+    });
+  }
+  const passwordRegex =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  if (!passwordRegex.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Password must include an uppercase, lowercase, number, special character, and be at least 8 characters",
+    });
+  }
+
+  const passwordScore = zxcvbn(newPassword).score;
+  if (passwordScore < 3) {
+    return res.status(400).json({
+      success: false,
+      message: "Password is too weak. Try something more secure.",
+    });
+  }
+
+  
+ 
+  await user.save(); // will trigger pre-save hook for hashing
+ 
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Password changed successfully"));
+});
+
+
+
+
+
+const loginUser = asyncHandler(async (req, res) => {
+  const { username, email, password } = req.body;
+
+  if (!password || (!username && !email)) {
+    return res.status(400).json({
+      success: false,
+      message: "Username/email and password are required",
+    });
+  }
+
+  const user = await User.findOne({
+    $or: [{ username }, { email }],
+  }).select("+password");
+
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: "User not found",
+    });
+  }
+
+  const isMatch = await user.isPasswordCorrect(password);
+  
+  if (!isMatch) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid credentials",
+    });
+  }
+
+  const { accessToken, refreshToken } = await generateAccessTokenAndRefreshToken(user._id);
+
+  const isProd = process.env.NODE_ENV === "production";
+  const cookieOptions = {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "None" : "Lax",
+  };
+
+  res
+    .cookie("accessToken", accessToken, { ...cookieOptions, maxAge: 24 * 60 * 60 * 1000 })
+    .cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
+
+  const safeUser = await User.findById(user._id).select("-password -refreshToken");
+
+  return res.status(200).json(
+    new ApiResponse(200, {
+      user: safeUser,
+      accessToken,
+      refreshToken,
+    }, "User logged in successfully")
+  );
+});
+
+// const changecurrentPassword = asyncHandler(async (req, res) => {
+//   const { username, email, currentPassword, newPassword } = req.body;
+
+//   const user = await User.findById(req.user._id);
+//   if (!user) {
+//     return res.status(404).json({
+//       success: false,
+//       message: "User not found",
+//     });
+//   }
+
+//   const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
+//   console.log(isPasswordCorrect);
+//   if (!isPasswordCorrect) {
+//     return res.status(401).json({
+//       success: false,
+//       message: "Current password is incorrect",
+//     });
+//   }
+
+//   if (await bcrypt.compare(newPassword, user.password)) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "New password cannot be the same as the current password",
+//     });
+//   }
+
+//   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+//   if (!passwordRegex.test(newPassword)) {
+//     return res.status(400).json({
+//       success: false,
+//       message:
+//         "Password must include an uppercase, lowercase, number, and special character and be at least 8 characters",
+//     });
+//   }
+
+//   const passwordScore = zxcvbn(newPassword).score;
+//   if (passwordScore > 5) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Password is too weak. Try something more secure.",
+//     });
+//   }
+
+//   if (!username || !email) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Username and email are required",
+//     });
+//   }
+
+//   // ✅ Set raw password — let Mongoose pre-save middleware hash it
+//   user.password = newPassword;
+//   console.log(user.password);
+
+//   // ✅ Just save — Mongoose will hash the password automatically
+//   await user.save(); // Do NOT disable hooks or validation
+//   console.log(user.password);
+
+//   return res
+//     .status(200)
+//     .json(new ApiResponse(200, null, "Password changed successfully"));
+// });
+
+
+
+
 
   export {
     registerUser,
