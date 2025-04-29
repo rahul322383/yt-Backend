@@ -1,14 +1,24 @@
-import mangoose, { Schema } from 'mongoose';
-const subscriptionSchema = new Schema({
-    subscriber: {
-         type: Schema.Types.ObjectId, ref: 'User'
-         },
-    
-    channel: {
-        type: Schema.Types.ObjectId,
-        ref: 'Channel',
-    }
-},
-{ timestamps: true });
+import mongoose from "mongoose";
 
-export const Subscription = mangoose.model('subscription', subscriptionSchema);
+const subscriptionSchema = new mongoose.Schema({
+  subscriber: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
+  channel: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
+  subscribedAt: {
+    type: Date,
+    default: Date.now,
+  },
+}, {
+  timestamps: true,
+});
+
+subscriptionSchema.index({ subscriber: 1, channel: 1 }, { unique: true });
+
+export const Subscription = mongoose.model("Subscription", subscriptionSchema);

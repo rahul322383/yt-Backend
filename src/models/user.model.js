@@ -19,7 +19,7 @@ const userSchema = new Schema(
       required: true,
       unique: true,
       trim: true,
-      lowercase: true, // ✅ typo fixed: `lowecase` → `lowercase`
+      lowercase: true, 
       index: true
     },
     email: {
@@ -27,7 +27,7 @@ const userSchema = new Schema(
       required: false, // optional for testing
       unique: true,
       trim: true,
-      lowercase: true // ✅ typo fixed: `lowecase` → `lowercase`
+      lowercase: true 
     },
     password: {
       type: String,
@@ -52,9 +52,15 @@ const userSchema = new Schema(
     coverImage: {
       type: String
     },
+    // channelId: {
+    //   type: String,
+    //   // type:mongoose.Schema.Types.ObjectId,
+    //   ref: "user",
+    // },
     channelId: {
       type: String,
-      unique: true,
+      // unique: true,
+      required: true,
       default: () => `channel_${crypto.randomUUID().slice(0, 12)}`
     },
     watchHistory: {

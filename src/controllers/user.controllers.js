@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs';
 import zxcvbn from 'zxcvbn';
 import crypto from 'crypto';
 import {v2 as cloudinary} from 'cloudinary';
+import Channel from '../models/channel.model.js';
 
 
 
@@ -743,17 +744,19 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 //first i will generate  playlisId after that i will accesing playlist {++(mini =6 mixi =undefined)logic for playlistId}
 //
 
+
 const getUserChannelById = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
+  console.log("Received channelId:", channelId);
 
   if (!channelId?.trim()) {
-    return res.status(400).json({ success: false, message: "Channel ID is required" });
+    return res.status(400).json({ success: false, message: "channelId is required" });
   }
 
   const channel = await User.aggregate([
     {
       $match: {
-        channelId: channelId
+        channelId: channelId.toLowerCase()
       }
     },
     {
@@ -762,6 +765,14 @@ const getUserChannelById = asyncHandler(async (req, res) => {
         localField: "_id",
         foreignField: "channel",
         as: "subscribers"
+      }
+    },
+    {
+      $lookup: {
+        from: "subscribes",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscriptions"
       }
     },
     {
@@ -775,18 +786,38 @@ const getUserChannelById = asyncHandler(async (req, res) => {
     {
       $addFields: {
         subscribersCount: { $size: { $ifNull: ["$subscribers", []] } },
-        videosCount: { $size: { $ifNull: ["$videos", []] } }
+        channelIsSubscribedToCount: { $size: { $ifNull: ["$subscriptions", []] } },
+        videosCount: { $size: { $ifNull: ["$videos", []] } },
+        channelIsSubscribedTo: {
+          $cond: {
+            if: {
+              $in: [
+                req.user?._id || null,
+                {
+                  $map: {
+                    input: "$subscribers",
+                    as: "s",
+                    in: "$$s.subscriber"
+                  }
+                }
+              ]
+            },
+            then: true,
+            else: false
+          }
+        }
       }
     },
     {
       $project: {
-        _id: 1,
         channelId: 1,
-        fullName: 1,
+        fullname: 1,
         username: 1,
         avatar: 1,
         coverImage: 1,
         email: 1,
+        channelIsSubscribedTo: 1,
+        channelIsSubscribedToCount: 1,
         subscribersCount: 1,
         videosCount: 1
       }
@@ -797,10 +828,15 @@ const getUserChannelById = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: "Channel not found" });
   }
 
-  return res.status(200).json(
-    new ApiResponse(200, channel[0], "User channel fetched successfully")
-  );
+  return res
+    .status(200)
+    .json(new ApiResponse(200, channel[0], "User channel fetched successfully"));
 });
+
+
+
+
+
 
 
 

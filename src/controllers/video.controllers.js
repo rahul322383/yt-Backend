@@ -63,41 +63,80 @@ export const getAllVideos = asyncHandler(async (req, res) => {
 
 // 🔹 PUBLISH/UPLOAD a video
 
-export const publishAVideo = asyncHandler(async (req, res) => {
-  const {
-    title,
-     } = req.body;
+// export const publishAVideo = asyncHandler(async (req, res) => {
+//   const {
+//     title,
+//      } = req.body;
 
-  const videoFile = req.files?.videoFile?.[0];
+//   const videoFile = req.files?.videoFile?.[0];
  
 
-  // Validation
-  if (!title || !videoFile ) {
-    return res.status(400).json(new ApiResponse(400, {}, "Invalid request"));
-  }
-  // Upload video and thumbnail
-  const videoUpload = await uploadOnCloudinary(videoFile.path, "video");
-  if (!videoUpload?.url) {
-    return res.status(500).json(new ApiResponse(500, {}, "Video upload failed"));
+//   // Validation
+//   if (!title || !videoFile ) {
+//     return res.status(400).json(new ApiResponse(400, {}, "Invalid request"));
+//   }
+//   // Upload video and thumbnail
+//   const videoUpload = await uploadOnCloudinary(videoFile.path, "video");
+//   if (!videoUpload?.url) {
+//     return res.status(500).json(new ApiResponse(500, {}, "Video upload failed"));
+//   }
+
+//   // Create video document
+//   const newVideo = await Video.create({
+//     videoId: videoUpload.public_id,
+//     title,
+//     videoUrl: videoUpload.url,
+//     owner: req.user._id,
+//     isPublished,
+//     cloudinaryId: videoUpload?.public_id || undefined,
+//     // videoId is auto-generated using uuidv4 in schema
+    
+//   })
+
+//   return res.status(201).json(
+//     new ApiResponse(201, newVideo, "Video uploaded and published successfully")
+//   );
+// });
+
+
+
+export const publishAVideo = asyncHandler(async (req, res) => {
+  const { title, description, tags, playlistId, isPublished = true } = req.body;
+  const videoFile = req.files?.videoFile?.[0];
+
+  // Validate required fields
+  if (!title || !videoFile) {
+    return res.status(400).json(
+      new ApiResponse(400, null, "Title and video file are required")
+    );
   }
 
-  // Create video document
+  // Upload video to Cloudinary
+  const videoUpload = await uploadOnCloudinary(videoFile.path, "video");
+  if (!videoUpload?.url) {
+    return res.status(500).json(
+      new ApiResponse(500, null, "Video upload to Cloudinary failed")
+    );
+  }
+
+  // Create the video document (videoId is auto-generated via schema)
   const newVideo = await Video.create({
-    videoId: videoUpload.public_id,
     title,
+    description,
+    tags: tags ? tags.split(",").map(tag => tag.trim()) : [],
+    playlistId,
     videoUrl: videoUpload.url,
+    cloudinaryId: videoUpload.public_id,
     owner: req.user._id,
     isPublished,
-    cloudinaryId: videoUpload?.public_id || undefined,
-    // videoId is auto-generated using uuidv4 in schema
-    
-  })
+    duration: videoUpload.duration,
+    size: videoUpload.bytes,
+  });
 
   return res.status(201).json(
     new ApiResponse(201, newVideo, "Video uploaded and published successfully")
   );
 });
-
 
 
 export const getVideoById = asyncHandler(async (req, res) => {
@@ -151,25 +190,34 @@ export const getVideoById = asyncHandler(async (req, res) => {
 export const playVideoById = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
 
-  const video = await Video.findById(videoId);
-
-  if (!video) {
-    return res.status(404).json({
-      success: false,
-      statusCode: 404,
-      message: "Video not found",
-      data: null,
-    });
+  if (!videoId) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Video ID is required"));
   }
 
-  // If video found, respond with video data
-  return res.status(200).json({
-    success: true,
-    statusCode: 200,
-    message: "Video found",
-    data: video,
-  });
+  // Find and increment view count in a single operation
+  const video = await Video.findById(videoId).populate('playlistId');
+ 
+
+
+  if (!video) {
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Video not found"));
+  }
+  
+    // .populate("owner", "username avatar")
+    // .populate("playlistId", "title");
+
+  
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, video, "Video details fetched successfully"));
 });
+
+
 
 
 
@@ -178,12 +226,12 @@ export const updateVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   const updates = req.body;
 
-  if (req.file) {
-    const thumbUpload = await uploadOnCloudinary(req.file.path, "image");
-    updates.thumbnail = thumbUpload.url;
-  }
+  // if (req.file) {
+  //   const thumbUpload = await uploadOnCloudinary(req.file.path, "image");
+  //   updates.thumbnail = thumbUpload.url;
+  // }
 
-  const updated = await Video.findOneAndUpdate({ videoId }, updates, { new: true });
+  const updated = await Video.findOneAndUpdate({ _id :videoId }, updates, { new: true });
 
   if (!updated)
     return res.status(404).json(new ApiResponse(404, {}, "Video not found"));
@@ -224,48 +272,98 @@ const extractCloudinaryPublicId = (url) => {
   }
 };
 
+// export const deleteVideo = asyncHandler(async (req, res) => {
+//   const { videoId } = req.params;
+
+//   // 1. Delete from MongoDB (Video collection)
+//   const deletedVideo = await Video.findByIdAndDelete(videoId);
+//   if (!deletedVideo) {
+//     return res.status(404).json({
+//       success: false,
+//       message: "❌ Video not found",
+//     });
+//   }
+
+//   const updateVideo = await Video.findOneAndUpdate(
+//     { _id: videoId },
+//     { status: "deleted" },
+//     { new: true }
+//   );
+//   console.log("Updated video status:", updateVideo);
+
+
+
+
+//   // 2. Remove video from all playlists
+//   const removesvideos =await Playlist.updateMany(
+//     {},
+//     {
+//       $pull: {
+//         videos: { videoId: deletedVideo.videoId },
+//       },
+//     }
+//   );
+//   console.log("Removed video from all playlists:", removesvideos);
+
+//   // 3. Delete from Cloudinary
+//   const cloudinaryId =
+//     deletedVideo.cloudinaryId || extractCloudinaryPublicId(deletedVideo.videoUrl);
+//     console.log("Cloudinary ID:", cloudinaryId);
+
+//   if (cloudinaryId) {
+//     await cloudinary.uploader.destroy(cloudinaryId, {
+//       resource_type: "video",
+//     });
+//   } else {
+//     console.warn("⚠ Cloudinary ID not found, skipping cloud deletion.");
+//   }
+
+//   // 4. Respond to client
+//   return res.status(200).json(
+//     new ApiResponse(200, null, "✅ Video deleted from DB, playlists, and Cloudinary.")
+//   );
+// });
+
+
 export const deleteVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
 
-  // 1. Delete from MongoDB (Video collection)
-  const deletedVideo = await Video.findByIdAndDelete(videoId);
-  if (!deletedVideo) {
+  // Step 1: Find the video by ID
+  const video = await Video.findById(videoId);
+  if (!video) {
     return res.status(404).json({
       success: false,
       message: "❌ Video not found",
     });
   }
 
-  // 2. Remove video from all playlists
-  const removesvideos =await Playlist.updateMany(
+  // Step 2: Remove video from all playlists
+  const playlistUpdate = await Playlist.updateMany(
     {},
-    {
-      $pull: {
-        videos: { videoId: deletedVideo.videoId },
-      },
-    }
+    { $pull: { videos: { videoId: videoId } } }
   );
-  console.log("Removed video from all playlists:", removesvideos);
+ 
 
-  // 3. Delete from Cloudinary
-  const cloudinaryId =
-    deletedVideo.cloudinaryId || extractCloudinaryPublicId(deletedVideo.videoUrl);
-    console.log("Cloudinary ID:", cloudinaryId);
-
+  // Step 3: Delete video from Cloudinary
+  const cloudinaryId = video.cloudinaryId || extractCloudinaryPublicId(video.videoUrl);
   if (cloudinaryId) {
     await cloudinary.uploader.destroy(cloudinaryId, {
       resource_type: "video",
     });
+  
   } else {
     console.warn("⚠ Cloudinary ID not found, skipping cloud deletion.");
   }
 
-  // 4. Respond to client
+  // Step 4: Delete from MongoDB
+  await Video.findByIdAndDelete(videoId);
+ 
+
+  // Step 5: Respond to client
   return res.status(200).json(
-    new ApiResponse(200, null, "✅ Video deleted from DB, playlists, and Cloudinary.")
+    new ApiResponse(200, null, "✅ Video deleted from MongoDB, playlists, and Cloudinary.")
   );
 });
-
 
 
 export const getAndTrackVideo = asyncHandler(async (req, res) => {

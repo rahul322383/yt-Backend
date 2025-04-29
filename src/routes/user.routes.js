@@ -15,6 +15,7 @@ import {
   updateUserCoverImage,
   getUserChannel,
   getwatchHistory,
+  getUserChannelById
 } from "../controllers/user.controllers.js";
 
 import {
@@ -73,8 +74,8 @@ router.put("/update-cover", verifyJWT, upload.single("coverImage"), updateUserCo
 
 /* -------------------- Channel & Watch History Routes -------------------- */
 
-router.get("/channel/:username", verifyJWT, getUserChannel);
-router.get("/:username/:channelId", verifyJWT, getUserChannel);
+router.get("/c/:username", verifyJWT, getUserChannel);
+router.get("/c/:channelId", verifyJWT, getUserChannelById);
 router.get("/watch-history", verifyJWT, getwatchHistory);
 
 /* ---------------------- Playlist Video Upload Route --------------------- */

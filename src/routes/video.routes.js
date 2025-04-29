@@ -24,16 +24,16 @@ router.get("/", getAllVideos);
 router.get("/", getAllVideos);
 
 // 🔹 UPLOAD a new video
-router.post("/videos", upload.single("videoFile"), publishAVideo);
+router.post("/playlists/:playlistId/videos", upload.single("videoFile"), publishAVideo);
 
 // 🔹 GET a video by ID
 router.get("/videos/:videoId", getVideoById);
 
 // // 🔹 STREAM (play) a video by ID
-router.get("/play/videos/:videoId", playVideoById); // Changed from PATCH to GET
+router.get("/play/:videoId", playVideoById); // Changed from PATCH to GET
 
 // 🔹 UPDATE video title/description
-router.put("/:videoId", updateVideo);
+router.put("/videos/update/:videoId", updateVideo);
 
 // 🔹 DELETE a video
 router.delete("/videos/:videoId", deleteVideo);

@@ -20,8 +20,10 @@ const router = express.Router();
 router.use(verifyJWT);
 
 // ✅ Like/Dislike routes for Video
-router.post("/:videoId/like", likeVideo);
-router.delete("/:videoId/like", dislikeVideo);
+router.post("/videos/:videoId/like", likeVideo);
+router.delete("/videos/:videoId/like", dislikeVideo);
+router.post("/videos/:videoId/toggle-like", toggleVideoLike);
+router.get("/videos/:videoId/like-count", getVideoLikeCount);
 
 // ✅ Like/Dislike routes for Comment
 router.post("/comments/:commentId/like", likeComment);
@@ -32,13 +34,9 @@ router.post("/tweets/:tweetId/like", likeTweet);
 router.delete("/tweets/:tweetId/like", dislikeTweet);
 
 // ✅ Get all liked videos by user with pagination
-router.get("/liked-videos", getLikedVideos);
+router.get("/videos/playlist/liked-videos", getLikedVideos);
 
-
-router.get("/video/:videoId/like-count", getVideoLikeCount);
-router.post("/video/:videoId/toggle-like", verifyJWT, toggleVideoLike);
-router.get("/admin/like-stats", verifyJWT,  getAdminLikeStats);
-
-
+// ✅ Admin Stats
+router.get("/admin/like-stats", getAdminLikeStats);
 
 export default router;

@@ -22,6 +22,8 @@ import settingRouter from "./routes/settings.routes.js";
 import emailRouter  from "./routes/email.routes.js";
 import adminRouter from "./routes/admin.routes.js"; 
 import authrouter from "./routes/auth.Routes.js"
+import channelrouter from "./routes/channel.routes.js"
+import trandingvideoRouter from "./routes/tranding.routes.js"
 
 const app = express();
 
@@ -58,21 +60,25 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ✅ Routes
+
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/users/tweets", tweetRouter);
 app.use("/api/v1/users/subscribe", subscriptionRouter);
 app.use("/api/v1/users/videos", videoRouter);// get all videos
 app.use("/api/v1/users/playlist", videoRouter);
-app.use("/api/v1/users/videos", commentRouter);//comment video
-app.use("/api/v1/users/videos", likeRouter);//like video
+// app.use("/api/v1/users/videos", commentRouter);//comment video
+app.use("/api/v1/users", likeRouter);//like video
 app.use("/api/v1/users/playlist", playlistRouter);
 app.use("/api/v1/users/dashboard", dashboardRouter);
 app.use("/api/v1/users/analytics", analyticsRouter);
 app.use("/api/v1/users/settings", settingRouter);
-app.use("/api/v1/users/videos", commentRouter);
-app.use("/api/v1/users/sendEmail", emailRouter);
+app.use("/api/v1/users/comments", commentRouter);
+app.use("/api/v1/users/sendemail", emailRouter);
 app.use("/api/v1/admin", authrouter);
+app.use("/api/v1/users", channelrouter);
+app.use("/api/v1/videos", trandingvideoRouter);
+
 
 // ✅ Root
 app.get("/", (req, res) => {

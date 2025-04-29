@@ -96,58 +96,111 @@ export const dislikeTweet = createDislikeHandler("tweet", Tweet, "tweet");
 
 
 export const getLikedVideos = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  let { page = 1, limit = 10 } = req.query;
+  page = Number(page);
+  limit = Number(limit);
 
   const skip = (page - 1) * limit;
 
-  const [liked, total] = await Promise.all([
-    Like.find({
-      likedBy: req.user._id,
-      video: { $exists: true },
+  const liked = await Like.find({
+    likedBy: req.user._id,
+    video: { $exists: true },
+  })
+    .skip(skip)
+    .limit(limit)
+    .populate({
+      path: "video",
+      select: "title thumbnail views owner",
+      populate: { path: "owner", select: "username avatar" },
     })
-      .skip(skip)
-      .limit(Number(limit))
-      .populate({
-        path: "video",
-        select: "title thumbnail views owner",
-        populate: { path: "owner", select: "username avatar" },
-      })
-      .sort({ createdAt: -1 })
-      .lean(),
-    Like.countDocuments({ likedBy: req.user._id, video: { $exists: true } }),
-  ]);
+    .sort({ createdAt: -1 })
+    .lean();
 
-  const likedVideos = liked.filter((item) => item.video); // Exclude deleted
+  const likedVideos = liked.filter((item) => item.video); // Exclude deleted videos
 
   return res.status(200).json(
     new ApiResponse(200, {
       likedVideos,
-      total,
-      page: Number(page),
-      pages: Math.ceil(total / limit),
+      total: likedVideos.length,
+      page,
+      pages: Math.ceil(likedVideos.length / limit),
     }, "Liked videos retrieved successfully")
   );
 });
 
 
+
+
 export const getVideoLikeCount = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
+  
 
+  // Check if the videoId is a valid ObjectId
   if (!isValidObjectId(videoId)) {
-    return res.status(400).json(new ApiError(400, "Invalid video ID"));
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid video ID"));
   }
 
+  // Find the video by ID
   const video = await Video.findById(videoId);
-  if (video.status === "deleted")
-    return res.status(404).json(new ApiError(404, "Video not found"));
-    
 
+  // If the video is not found, return an error response
+  if (!video) {
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Video not found"));
+  }
+
+  // If the video is deleted, return an error response
+  if (video.status === "deleted") {
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Video not found"));
+  }
+
+  // Get the like count for the video
   const likeCount = await Like.countDocuments({ video: videoId });
 
+  // Return a success response with the like count
   return res
     .status(200)
     .json(new ApiResponse(200, { likeCount }, "Video like count retrieved"));
 });
+
+
+
+// export const toggleVideoLike = asyncHandler(async (req, res) => {
+//   const { videoId } = req.params;
+//   console.log (videoId);
+
+//   if (!isValidObjectId(videoId)) {
+//     return res.status(400).json(new ApiError(400, "Invalid video ID"));
+//   }
+
+//   const video = await Video.findById(videoId);
+//   if (video.status === "deleted")
+//     return res.status(404).json(new ApiError(404, "Video not found"));
+
+//   const existingLike = await Like.findOne({ likedBy: req.user._id, video: videoId });
+
+//   let likeCount;
+
+//   if (existingLike) {
+//     await existingLike.deleteOne();
+//     likeCount = await Like.countDocuments({ video: videoId });
+//     return res.status(200).json(
+//       new ApiResponse(200, { liked: false, likeCount }, "Like removed")
+//     );
+//   }
+
+//   await Like.create({ likedBy: req.user._id, video: videoId });
+//   likeCount = await Like.countDocuments({ video: videoId });
+
+//   return res.status(201).json(
+//     new ApiResponse(201, { liked: true, likeCount }, "Video liked")
+//   );
+// });
 
 
 export const toggleVideoLike = asyncHandler(async (req, res) => {
@@ -158,8 +211,9 @@ export const toggleVideoLike = asyncHandler(async (req, res) => {
   }
 
   const video = await Video.findById(videoId);
-  if (video.status === "deleted")
+  if (!video || video.status === "deleted") {
     return res.status(404).json(new ApiError(404, "Video not found"));
+  }
 
   const existingLike = await Like.findOne({ likedBy: req.user._id, video: videoId });
 

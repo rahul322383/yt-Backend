@@ -18,13 +18,20 @@ const videoSchema = new mongoose.Schema({
   subscribers: { type: Number, default: 0 },
   isPublished: { type: Boolean, default: true },
   uploadedAt: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 });
 
 const playlistSchema = new mongoose.Schema(
   {
     name: String,
     description: String,
-    videos: [videoSchema],
+    videos: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Video",
+      },
+    ],
   },
   { timestamps: true }
 );

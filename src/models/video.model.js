@@ -33,7 +33,7 @@ const videoSchema = new mongoose.Schema(
     },
     isPublished: {
       type: Boolean,
-      default: false,
+      default: true,
     },
     comments: [
       {
@@ -58,6 +58,8 @@ const videoSchema = new mongoose.Schema(
     cloudinaryId: {
       type: String,
     },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
   },
   {
     timestamps: true,

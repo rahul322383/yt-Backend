@@ -4,9 +4,6 @@ import sendEmail from "../utils/SendEmail.js";
 const generateOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
 
 
-
-
-
 export const sendOtp = async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: "Email is required" });
@@ -22,6 +19,8 @@ export const sendOtp = async (req, res) => {
     subject: "Your OTP Code",
     html: `<h1>Your OTP is ${code}</h1><p>It will expire in 10 minutes.</p>`,
   });
+  
+  
 
   res.status(200).json({ success: true, message: "OTP sent to email" });
 };
