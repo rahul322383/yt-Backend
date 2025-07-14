@@ -3,7 +3,7 @@ import {
   createPlaylist,
   getPlaylistById,
   getPlaylistsByUser,
-  addVideoToPlaylist,
+  // addVideoToPlaylist,
   removeVideoFromPlaylist,
   deletePlaylist,
   updatePlaylist
@@ -16,14 +16,25 @@ const router = express.Router();
 // All routes require authentication
 router.use(verifyJWT);
 
-// Create a new playlist
-router.post("/", createPlaylist);
+
+// Get a single playlist by ID
+router.get("/:playlistId", getPlaylistById);
 
 // Get all playlists of the current user
 router.get("/", getPlaylistsByUser);
 
+
+
+
+// Create a new playlist
+router.post("/", createPlaylist);
+
+
+
+
 // Get a single playlist by ID
-router.get("/:playlistId", getPlaylistById);
+router.post("/:playlistId", getPlaylistById);
+
 
 // Update playlist details
 router.put("/:playlistId", updatePlaylist);
@@ -32,11 +43,11 @@ router.put("/:playlistId", updatePlaylist);
 router.delete("/:playlistId", deletePlaylist);
 
 // ✅ Add a video to a playlist (corrected path)
-router.post(
-  "/:playlistId/videos",
-  upload.fields([{ name: "video", maxCount: 1 }]),
-  addVideoToPlaylist
-);
+// router.post(
+//   "/:playlistId/videos",
+//   upload.fields([{ name: "video", maxCount: 1 }]),
+//   addVideoToPlaylist
+// );
 
 // Remove a video from a playlist
 router.delete("/:playlistId/videos/:videoId", removeVideoFromPlaylist);

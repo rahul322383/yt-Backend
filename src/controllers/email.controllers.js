@@ -1,5 +1,6 @@
 import { Otp } from "../models/Otp.model.js";
 import sendEmail from "../utils/SendEmail.js";
+import { User } from "../models/user.model.js";
 
 const generateOtp = () => Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -62,3 +63,5 @@ export const resendOtp = async (req, res) => {
 
   res.status(200).json({ success: true, message: "OTP resent" });
 };
+
+

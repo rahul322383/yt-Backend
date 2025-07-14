@@ -43,83 +43,86 @@ const registerUser = asyncHandler(async (req, res) => {
       username,
       password,
       signupType = "email", // "email" | "google" | "github" | "facebook"
-      providerId, // unique ID from Google/GitHub/Facebook
-      avatarUrl, // optional avatar URL from OAuth provider
+      providerId,
+      avatarUrl,
       coverUrl,
       ...rest
     } = req.body;
 
-    // Basic validations
+    // 🧽 Clean input
+    const cleanFullName = fullName?.trim();
+    const cleanEmail = email?.toLowerCase().trim();
+    const cleanUsername = username?.trim().toLowerCase();
+
+    // 🧠 Regex validators
+    const emojiOrSymbolRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{S}]/gu;
+    const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+
+    // 🧾 Field validations
     if (signupType === "email") {
-      if ([fullName, email, username, password].some(field => !field?.trim())) {
+      if (![cleanFullName, cleanEmail, cleanUsername, password].every(Boolean)) {
         return res.status(400).json(new ApiResponse(400, null, "Missing required fields"));
+      }
+
+      if (emojiOrSymbolRegex.test(cleanFullName)) {
+        return res.status(400).json(new ApiResponse(400, null, "Full name can't contain emojis or symbols"));
+      }
+
+      if (!usernameRegex.test(cleanUsername)) {
+        return res.status(400).json(new ApiResponse(400, null, "Username must be 3-20 chars (letters, numbers, underscores only)"));
+      }
+
+      if (!emailRegex.test(cleanEmail)) {
+        return res.status(400).json(new ApiResponse(400, null, "Invalid email format"));
+      }
+
+      if (!passwordRegex.test(password)) {
+        return res.status(400).json(new ApiResponse(400, null, "Password must be 6+ chars with uppercase, lowercase & number"));
       }
     } else {
-      if (!email || !providerId || !signupType) {
-        return res.status(400).json(new ApiResponse(400, null, "Missing required fields"));
+      if (!cleanEmail || !providerId || !signupType) {
+        return res.status(400).json(new ApiResponse(400, null, "Missing required OAuth fields"));
       }
     }
 
-    // 🔍 Check for duplicate email
-    const existingEmail = await User.findOne({ email });
+    // 🔍 Check if email or username already exists
+    const existingEmail = await User.findOne({ email: cleanEmail });
     if (existingEmail) {
-      return res.status(409).json(
-        new ApiResponse(409, null, "Email is already registered")
-      );
+      return res.status(409).json(new ApiResponse(409, null, "Email is already registered"));
     }
 
-    // 🔍 Check for duplicate username (only for email signup)
     if (signupType === "email") {
-      const existingUsername = await User.findOne({ username: username?.toLowerCase() });
+      const existingUsername = await User.findOne({ username: cleanUsername });
       if (existingUsername) {
-        return res.status(409).json(
-          new ApiResponse(409, null, "Username is already taken")
-        );
+        return res.status(409).json(new ApiResponse(409, null, "Username is already taken"));
       }
     }
 
-    // 🔍 Check for duplicate OAuth providerId
     if (signupType !== "email") {
       const existingOAuth = await User.findOne({ providerId, signupType });
       if (existingOAuth) {
-        return res.status(409).json(
-          new ApiResponse(409, null, `${signupType} account already exists`)
-        );
+        return res.status(409).json(new ApiResponse(409, null, `${signupType} account already exists`));
       }
     }
 
-    // 📂 File handling
+    // 🖼️ Upload files
     const avatarLocalPath = req.files?.avatar?.[0]?.path;
-    const coverImageLocalPath = req.files?.cover?.[0]?.path;
+    const coverLocalPath = req.files?.cover?.[0]?.path;
 
-    let avatarUpload = null;
-    if (avatarLocalPath) {
-      avatarUpload = await uploadOnCloudinary(avatarLocalPath);
+    const avatarUpload = avatarLocalPath ? await uploadOnCloudinary(avatarLocalPath) : null;
+    const coverUpload = coverLocalPath ? await uploadOnCloudinary(coverLocalPath) : null;
+
+    if (signupType === "email" && !avatarUpload?.url) {
+      return res.status(400).json(new ApiResponse(400, null, "Avatar is required for email signup"));
     }
-    
-    let coverUpload = null;
-    if (coverImageLocalPath) {
-      coverUpload = await uploadOnCloudinary(coverImageLocalPath);
-    }
-
-    // let coverUpload = coverImageLocalPath
-    //   ? await uploadOnCloudinary(coverImageLocalPath)
-    //   : null;
-      
-
-      if (signupType === "email" && !avatarUpload?.url) {
-        return res.status(400).json({
-          success: false,
-          message: "Avatar is required for email signup",
-        });
-      }
-      
 
     // 👤 Create user
     const newUser = await User.create({
-      fullName,
-      email,
-      username: username?.toLowerCase(),
+      fullName: cleanFullName,
+      email: cleanEmail,
+      username: cleanUsername,
       password: signupType === "email" ? password : undefined,
       providerId: signupType !== "email" ? providerId : undefined,
       signupType,
@@ -129,21 +132,15 @@ const registerUser = asyncHandler(async (req, res) => {
     });
 
     if (!newUser) {
-      return res.status(500).json({
-        success: false,
-        message: "User creation failed",
-      });
-      
+      return res.status(500).json(new ApiResponse(500, null, "User creation failed"));
     }
 
-    // 🔐 Generate tokens
+    // 🔐 Tokens
     const { accessToken, refreshToken } = await generateAccessTokenAndRefreshToken(newUser._id);
-
-    // 💾 Save refresh token
     newUser.refreshToken = refreshToken;
     await newUser.save();
 
-    // 🍪 Set cookies
+    // 🍪 Set tokens in cookies
     const isProd = process.env.NODE_ENV === "production";
     res
       .cookie("accessToken", accessToken, {
@@ -160,88 +157,29 @@ const registerUser = asyncHandler(async (req, res) => {
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-    // ✅ Return created user (without password and refreshToken)
+    // 📦 Send response
     const createdUser = await User.findById(newUser._id).select("-password -refreshToken");
+
     return res.status(201).json(
       new ApiResponse(201, {
         user: createdUser,
         accessToken,
       }, "User created successfully")
     );
-
   } catch (error) {
     console.error("Register Error:", error);
 
-    // Handle MongoDB duplicate key error (fallback)
+    // MongoDB duplicate key fallback
     if (error.code === 11000) {
       const duplicateField = Object.keys(error.keyValue)[0];
-      return res
-      .status(409)
-      .json(new ApiResponse(409, null, `${duplicateField} is already in use`));
-
+      return res.status(409).json(new ApiResponse(409, null, `${duplicateField} is already in use`));
     }
 
     return res.status(error.statusCode || 500).json(
-      new ApiResponse(
-        error.statusCode || 500,
-        null,
-        error.message || "Internal Server Error"
-      )
+      new ApiResponse(error.statusCode || 500, null, error.message || "Internal Server Error")
     );
-    
   }
 });
-
-
-// LOGIN
-// const loginUser = asyncHandler(async (req, res) => {
-//   const { username, email, password } = req.body;
-//   console.log ("req.body", req.body);
-
-
-//   if (!password || (!username && !email)) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "Username/email and password are required",
-//     });
-    
-//   }
-//   console.log(username, email, password);
-
-//   const user = await User.findOne({
-//     $or: [{ username }, { email }],
-//   });
-//   console.log(user);
-
-//   if (!user || !(await user.isPasswordCorrect(password))) {
-//      return res.status(500)
-//      .json({
-//       success: false,
-//       message: "Invalid credentials",
-//     })
-//   }
-//   // 🔐 Generate tokens
-//   const { accessToken, refreshToken } = await generateAccessTokenAndRefreshToken(user._id);
-
-//   const isProd = process.env.NODE_ENV === "production";
-//   const cookieOptions = {
-//     httpOnly: true,
-//     secure: isProd,
-//     sameSite: isProd ? "None" : "Lax",
-//   };
-
-//   res
-//     .cookie("accessToken", accessToken, { ...cookieOptions, maxAge: 24 * 60 * 60 * 1000 })
-//     .cookie("refreshToken", refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000, path: "/" });
-
-//   const safeUser = await User.findById(user._id).select("-password -refreshToken");
-
-//   return res.status(200).json(new ApiResponse(200, {
-//     user: safeUser,
-//     accessToken,
-//     refreshToken,
-//   }, "User logged in successfully"));
-// });
 
 
 
@@ -250,108 +188,130 @@ const registerUser = asyncHandler(async (req, res) => {
 const socialLogin = async (req, res) => {
   const { token, provider } = req.body;
 
-  try {
-    if (!token || !provider) {
-      return res.status(400).json({ success: false, message: "Token and provider are required" });
-    }
+  if (!token || !provider) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Token and provider are required"));
+  }
 
+  try {
     let userData = null;
 
-    // 🔹 Verify provider token & extract user info
+    // ✅ Handle each provider
     if (provider === "google") {
-      const response = await axios.get(
-        `https://www.googleapis.com/oauth2/v3/userinfo`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const { email, name, picture } = response.data;
-      userData = { email, fullName: name, avatar: picture || "default-avatar-url" };
-    } else if (provider === "github") {
-      const userResp = await axios.get(`https://api.github.com/user`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const emailResp = await axios.get(`https://api.github.com/user/emails`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const { email, name, picture } = response.data;
+      userData = {
+        email,
+        fullName: name,
+        avatar: picture || "",
+        loginType: "google",
+      };
+
+    } else if (provider === "github") {
+      const userResp = await axios.get("https://api.github.com/user", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const emailResp = await axios.get("https://api.github.com/user/emails", {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const email = emailResp.data.find(e => e.primary && e.verified)?.email;
+      if (!email) throw new Error("Verified GitHub email not found");
+
       userData = {
         email,
         fullName: userResp.data.name || userResp.data.login,
-        avatar: userResp.data.avatar_url || "default-avatar-url"
+        avatar: userResp.data.avatar_url || "",
+        loginType: "github",
       };
+
     } else if (provider === "facebook") {
       const fbResp = await axios.get(
         `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${token}`
       );
       const { email, name, picture } = fbResp.data;
+      if (!email) throw new Error("Facebook email not provided");
+
       userData = {
         email,
         fullName: name,
-        avatar: picture?.data?.url || "default-avatar-url"
+        avatar: picture?.data?.url || "",
+        loginType: "facebook",
       };
     } else {
-      return res.status(400).json({ success: false, message: "Unsupported provider" });
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, "Unsupported provider"));
     }
 
+    // ⛔ No email = can't proceed
     if (!userData?.email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required from provider",
-      });
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, "Email is required from provider"));
     }
 
-    // 🔸 Check for existing user
+    // 🔍 Check if user exists
     let user = await User.findOne({ email: userData.email });
 
-    // 🔸 If not exist, create user
+    // ➕ If not, create new user
     if (!user) {
       user = await User.create({
         fullName: userData.fullName,
+        username: userData.email.split("@")[0],
         email: userData.email,
-        username: userData.email.split("@")[0], // basic username
         avatar: userData.avatar,
-        password: "", // No password for social login
-        loginType: provider,
+        password: "", // password is empty for social login
+        loginType: userData.loginType,
       });
     }
 
-    // 🔸 Generate JWTs
+    // 🔐 Tokens
     const { accessToken, refreshToken } = await generateAccessTokenAndRefreshToken(user._id);
+
     user.refreshToken = refreshToken;
     await user.save();
 
-    // 🔸 Set cookies
+    // 🍪 Set cookies (secure in prod)
     const isProd = process.env.NODE_ENV === "production";
+
     res
       .cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: isProd,
         sameSite: isProd ? "None" : "Lax",
-        maxAge: 24 * 60 * 60 * 1000,
+        maxAge: 1000 * 60 * 60 * 24, // 1 day
       })
       .cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: isProd,
         sameSite: isProd ? "None" : "Lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       });
 
-    // 🔸 Respond with user
-    const sanitizedUser = await User.findById(user._id).select("-password -refreshToken");
+    // 🚀 Send back sanitized user info
+    const safeUser = await User.findById(user._id).select("-password -refreshToken");
 
     return res.status(200).json(
       new ApiResponse(200, {
-        user: sanitizedUser,
+        user: safeUser,
         accessToken,
-      }, "Logged in successfully via " + provider)
+      }, `Logged in successfully via ${provider}`)
     );
+
   } catch (error) {
-    console.error("Social Login Error:", error.message);
-    return res.status(error.statusCode || 500).json(
-      new ApiResponse(error.statusCode || 500, null, error.message || "Social login failed")
-    );
+    console.error("🔥 Social Login Error:", error.message);
+    return res
+      .status(500)
+      .json(new ApiResponse(500, null, error.message || "Social login failed"));
   }
 };
+
+
+
 
 
 
@@ -467,52 +427,72 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
   );
 });
 
+
+
 const forgetPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
+    // 1. Check if email is provided
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
+    // 2. Find user
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Generate 6-digit OTP
+    // 3. Rate limit: Allow OTP request only once per 60 seconds
+    if (user.otpRequestedAt && Date.now() - user.otpRequestedAt < 60 * 1000) {
+      const waitTime = Math.ceil((60 * 1000 - (Date.now() - user.otpRequestedAt)) / 1000);
+      return res.status(429).json({
+        success: false,
+        message: `Please wait ${waitTime} seconds before requesting a new OTP.`,
+      });
+    }
+
+    // 4. Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Hash OTP for security before saving
+    // 5. Hash the OTP
     const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
-    const expiry = Date.now() + 10 * 60 * 1000; // OTP valid for 10 minutes
+    const expiry = Date.now() + 10 * 60 * 1000; // 10 mins
 
-    // Save OTP and expiry to user
+    // 6. Save to user
     user.resetPasswordToken = hashedOtp;
     user.resetPasswordExpires = expiry;
+    user.otpRequestedAt = Date.now();
+    user.isOtpVerified = false;
     await user.save({ validateBeforeSave: false });
-    //after testing change it
-    // Send OTP email
-    // const transporter = nodemailer.createTransport({
-    //   service: 'Gmail',
-    //   auth: {
-    //     user: process.env.SMTP_EMAIL,
-    //     pass: process.env.SMTP_PASSWORD,
-    //   },
-    // });
 
-    // const message = `Your password reset OTP is: ${otp}\nThis OTP will expire in 10 minutes.`;
+    // 7. Send email (disabled for testing)
+    /*
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD,
+      },
+    });
 
-    // await transporter.sendMail({
-    //   from: process.env.SMTP_EMAIL,
-    //   to: user.email,
-    //   subject: 'Password Reset OTP',
-    //   text: message,
-    // });
+    const message = `Your password reset OTP is: ${otp}\nThis OTP will expire in 10 minutes.`;
+
+    await transporter.sendMail({
+      from: process.env.SMTP_EMAIL,
+      to: user.email,
+      subject: 'Password Reset OTP',
+      text: message,
+    });
+    */
+
+    // For dev: log OTP
+    console.log(`🧪 Dev OTP for ${user.email}: ${otp}`);
 
     return res.status(200).json({
       success: true,
-      message: 'OTP sent to your email address',
+      message: 'OTP has been sent to your email',
     });
 
   } catch (error) {
@@ -522,36 +502,37 @@ const forgetPassword = async (req, res) => {
 };
 
 
+// VERIFY OTP
 const verifyOtp = async (req, res) => {
   try {
-    const { otp } = req.body;
+    const { email, otp } = req.body;
 
-    if (!otp || otp.length !== 6) {
-      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    if (!otp || otp.length !== 6 || !email) {
+      return res.status(400).json({ success: false, message: "Invalid input" });
     }
 
-    const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+    const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
 
-    // Find user with matching OTP and not expired
     const user = await User.findOne({
+      email,
       resetPasswordToken: hashedOtp,
       resetPasswordExpires: { $gt: Date.now() },
     });
 
     if (!user) {
-      return res.status(400).json({ success: false, message: 'OTP is invalid or has expired' });
+      return res.status(400).json({ success: false, message: "OTP is invalid or has expired" });
     }
 
-    // Clear token fields so they can't be reused
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
-    user.isOtpVerified = true; // Optional: mark user as verified
+    user.isOtpVerified = true;
+    user.otpRequestedAt = undefined;
     await user.save({ validateBeforeSave: false });
 
-    return res.status(200).json({ success: true, message: 'OTP verified successfully' });
+    return res.status(200).json({ success: true, message: "OTP verified successfully" });
   } catch (error) {
-    console.error('Verify OTP Error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("Verify OTP Error:", error);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
 
@@ -653,7 +634,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 });
 
 
-  const getUserChannel = asyncHandler(async (req, res) => {
+const getUserChannel = asyncHandler(async (req, res) => {
     const { username } = req.params;
   
     if (!username?.trim()) {
@@ -740,98 +721,283 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     );
   });
   
-  
-//first i will generate  playlisId after that i will accesing playlist {++(mini =6 mixi =undefined)logic for playlistId}
-//
+ 
 
 
 const getUserChannelById = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
-  console.log("Received channelId:", channelId);
 
   if (!channelId?.trim()) {
-    return res.status(400).json({ success: false, message: "channelId is required" });
+    return res.status(400).json({ 
+      success: false, 
+      message: "Channel ID is required",
+      statusCode: 400
+    });
   }
 
   const channel = await User.aggregate([
     {
       $match: {
-        channelId: channelId.toLowerCase()
+        channelId: channelId.toLowerCase(),
+        status: { $ne: "deleted" } // Exclude deleted accounts
       }
     },
+    // Lookup subscribers
     {
       $lookup: {
         from: "subscribes",
         localField: "_id",
         foreignField: "channel",
-        as: "subscribers"
+        as: "subscribers",
+        pipeline: [
+          {
+            $match: {
+              status: "active" // Only count active subscriptions
+            }
+          }
+        ]
       }
     },
+    // Lookup subscriptions (channels this user is subscribed to)
     {
       $lookup: {
         from: "subscribes",
         localField: "_id",
         foreignField: "subscriber",
-        as: "subscriptions"
+        as: "subscriptions",
+        pipeline: [
+          {
+            $match: {
+              status: "active" // Only count active subscriptions
+            }
+          }
+        ]
       }
     },
+    // Lookup videos with additional details
     {
       $lookup: {
         from: "videos",
-        localField: "_id",
-        foreignField: "owner",
+        let: { ownerId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$owner", "$$ownerId"] },
+                  { $eq: ["$visibility", "public"] },
+                  { $ne: ["$status", "deleted"] }
+                ]
+              }
+            }
+          },
+          {
+            $lookup: {
+              from: "views",
+              localField: "_id",
+              foreignField: "video",
+              as: "views"
+            }
+          },
+          {
+            $addFields: {
+              viewCount: { $size: "$views" },
+              durationInSeconds: {
+                $divide: [
+                  { $subtract: ["$duration", 0] }, // Ensure duration is treated as number
+                  1000 // Convert milliseconds to seconds
+                ]
+              }
+            }
+          },
+          {
+            $project: {
+              title: 1,
+              description: 1,
+              thumbnail: 1,
+              videoUrl: 1,
+              duration: 1,
+              durationInSeconds: 1,
+              viewCount: 1,
+              likesCount: 1,
+              commentsCount: 1,
+              tags: 1,
+              visibility: 1,
+              createdAt: 1,
+              updatedAt: 1
+            }
+          },
+          { $sort: { createdAt: -1 } } // Newest videos first
+        ],
         as: "videos"
       }
     },
+    // Lookup playlists with video details
+    {
+      $lookup: {
+        from: "playlists",
+        let: { userId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$owner", "$$userId"] },
+              status: { $ne: "deleted" }
+            }
+          },
+          {
+            $lookup: {
+              from: "videos",
+              let: { videoIds: "$videos" },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $in: ["$_id", "$$videoIds"] },
+                        { $eq: ["$visibility", "public"] },
+                        { $ne: ["$status", "deleted"] }
+                      ]
+                    }
+                  }
+                },
+                {
+                  $project: {
+                    title: 1,
+                    thumbnail: 1,
+                    duration: 1,
+                    viewCount: 1
+                  }
+                }
+              ],
+              as: "videoList"
+            }
+          },
+          {
+            $addFields: {
+              videoCount: { $size: "$videoList" },
+              previewVideos: { $slice: ["$videoList", 4] } // Show first 4 videos as preview
+            }
+          },
+          {
+            $project: {
+              videoList: 0 // Remove full video list to reduce payload
+            }
+          },
+          { $sort: { updatedAt: -1 } } // Recently updated playlists first
+        ],
+        as: "playlists"
+      }
+    },
+    // Calculate aggregated fields
     {
       $addFields: {
-        subscribersCount: { $size: { $ifNull: ["$subscribers", []] } },
-        channelIsSubscribedToCount: { $size: { $ifNull: ["$subscriptions", []] } },
-        videosCount: { $size: { $ifNull: ["$videos", []] } },
+        subscribersCount: { $size: "$subscribers" },
+        subscriptionsCount: { $size: "$subscriptions" },
+        videosCount: { $size: "$videos" },
+        totalViews: {
+          $sum: "$videos.viewCount"
+        },
         channelIsSubscribedTo: {
           $cond: {
             if: {
               $in: [
                 req.user?._id || null,
-                {
-                  $map: {
-                    input: "$subscribers",
-                    as: "s",
-                    in: "$$s.subscriber"
-                  }
-                }
+                "$subscribers.subscriber"
               ]
             },
             then: true,
             else: false
           }
+        },
+        notificationPref: {
+          $ifNull: [
+            {
+              $let: {
+                vars: {
+                  sub: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: "$subscribers",
+                          as: "sub",
+                          cond: { $eq: ["$$sub.subscriber", req.user?._id || null] }
+                        }
+                      },
+                      0
+                    ]
+                  }
+                },
+                in: "$$sub.notificationPref"
+              }
+            },
+            "none"
+          ]
         }
       }
     },
+    // Project only necessary fields
     {
       $project: {
+        _id: 1,
         channelId: 1,
-        fullname: 1,
         username: 1,
+        fullname: 1,
         avatar: 1,
         coverImage: 1,
-        email: 1,
-        channelIsSubscribedTo: 1,
-        channelIsSubscribedToCount: 1,
+        bio: 1,
         subscribersCount: 1,
-        videosCount: 1
+        subscriptionsCount: 1,
+        videosCount: 1,
+        totalViews: 1,
+        channelIsSubscribedTo: 1,
+        notificationPref: 1,
+        videos: 1,
+        playlists: 1,
+        createdAt: 1,
+        updatedAt: 1
       }
     }
   ]);
 
   if (!channel?.length) {
-    return res.status(404).json({ success: false, message: "Channel not found" });
+    return res.status(404).json({ 
+      success: false, 
+      message: "Channel not found",
+      statusCode: 404
+    });
   }
 
-  return res
-    .status(200)
-    .json(new ApiResponse(200, channel[0], "User channel fetched successfully"));
+  // Format the response data
+  const channelData = channel[0];
+  
+  // Calculate total duration of all videos in seconds
+  const totalDuration = channelData.videos.reduce(
+    (sum, video) => sum + (video.durationInSeconds || 0),
+    0
+  );
+
+  // Add additional calculated fields
+  const responseData = {
+    ...channelData,
+    stats: {
+      totalVideos: channelData.videosCount,
+      totalSubscribers: channelData.subscribersCount,
+      totalViews: channelData.totalViews || 0,
+      totalWatchTime: totalDuration // In seconds
+    }
+  };
+
+  return res.status(200).json({
+    success: true,
+    statusCode: 200,
+    message: "Channel data retrieved successfully",
+    data: responseData
+  });
 });
+
+
+
+
 
 
 
@@ -855,199 +1021,6 @@ const getPlaylistById = asyncHandler(async (req, res) => {
 
   res.status(200).json(new ApiResponse(200, playlist, "Playlist fetched successfully"));
 });
-
-
-//first track user based on user id
-//first get all videos  after that show all videos in watchHistory
-const getwatchHistory = asyncHandler(async (req, res) => {
-  try {
-    // Step 1: Track user based on user ID (the user ID is fetched from req.user)
-    const userId = req.user?._id;
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User ID is required",
-      });
-    }
-
-    // Step 2: Get all videos the user has watched (via watchHistory array in the User document)
-    const user = await User.aggregate([
-      {
-        $match: {
-          _id: new mongoose.Types.ObjectId(userId),
-        },
-      },
-      {
-        $lookup: {
-          from: "videos",
-          localField: "watchHistory", // watchHistory stores video IDs
-          foreignField: "_id",
-          as: "watchHistory", // This will store the fetched videos
-          pipeline: [
-            {
-              $lookup: {
-                from: "users",
-                localField: "owner", // Get the user who owns the video
-                foreignField: "_id",
-                as: "owner",
-                pipeline: [
-                  {
-                    $project: {
-                      fullname: 1,
-                      username: 1,
-                      avatar: 1,
-                    },
-                  },
-                ],
-              },
-            },
-            {
-              $addFields: {
-                owner: { $arrayElemAt: ["$owner", 0] }, // Flatten the owner array to access the data
-              },
-            },
-          ],
-        },
-      },
-      {
-        $project: {
-          watchHistory: 1, // Include only the watchHistory field
-        },
-      },
-    ]);
-
-    // Check if user is found and has watch history
-    if (!user || user.length === 0 || !user[0].watchHistory) {
-      return res.status(404).json({
-        success: false,
-        message: "No watch history found for this user",
-      });
-    }
-
-    // Step 3: Return the watch history
-    return res.status(200).json(
-      new ApiResponse(200, user[0].watchHistory, "Watch history fetched successfully")
-    );
-  } catch (error) {
-    // Error handling
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-});
-
-// const getwatchHistory = asyncHandler(async(req,res)=>{
-
-//     const user =await User.aggregate([
-//         {
-//             $match: {
-//                 _id: new mongoose.Types.ObjectId(req.user?._id)
-//             }
-//         },
-//         {
-//             $lookup:{
-//                 from: "videos",
-//                 localField: "watchHistory",
-//                 foreignField: "_id",
-//                 as: "watchHistory",
-//                 pipeline: [
-//                     {
-//                         $lookup:{
-//                             from: "users",
-//                             localField: "owner",
-//                             foreignField: "_id",
-//                             as: "owner",
-//                             pipeline: [
-//                                 {
-//                                     $project:{
-//                                         fullname: 1,
-//                                         username: 1,
-//                                         avatar: 1,
-//                                     }
-//                                 },
-                                
-//                             ]
-
-//                         }
-//                     },
-//                     {                    
-//                     $addFields: {
-//                         owner: {
-//                              $arrayElemAt: ["$owner", 0] }
-//                         }
-                        
-//                     },
-                    
-                    
-//                 ]
-//             }
-//         },
-//         {
-//             $project:{
-//                 watchHistory: 1
-//             }
-//         }
-//     ])
-
-//     return res.status(200).json(
-//         new ApiResponse(200, user[0]?.watchHistory, "Watch history fetched successfully")
-//     )
-// })  
-
-
-
-
-// import sendEmail from '../utils/SendEmail.js';
-
-
-// const generateResetLink = (email) => {
-//   const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '1h' });
-//   return `http://localhost:5173/reset-password/${token}`; // Adjust to your frontend URL
-// };
-
-// const forgotPassword = async (req, res) => {
-//   const { email } = req.body;
-
-//   if (!email) {
-//     return res.status(400).send("Email is required.");
-//   }
-
-//   try {
-//     // Check if the email exists in the database
-//     const user = await User.findOne({ email });
-//     if (!user) {
-//       return res.status(404).send("User with this email does not exist.");
-//     }
-
-//     // Generate the reset link
-//     const resetLink = generateResetLink(email);
-//     const subject = "🔐 Password Reset Request";
-//     const html = `
-//       <p>Hi,</p>
-//       <p>You requested a password reset. Click the link below to reset your password:</p>
-//       <p><a href="${resetLink}">Reset Password</a></p>
-//       <p>This link will expire in 1 hour.</p>
-//       <p>If you did not request this, please ignore this email.</p>
-//     `;
-
-//     // Send the reset email
-//     await sendEmail(email, subject, html);
-
-//     // Respond with success message
-//     res.status(200).send("Password reset email sent.");
-//   } catch (error) {
-//     console.error("Error:", error);
-//     res.status(500).send("Error sending email.");
-//   }
-// };
-
-// export { forgotPassword };
-
-
-
-
 
 
 const changecurrentPassword = asyncHandler(async (req, res) => {
@@ -1160,69 +1133,228 @@ const loginUser = asyncHandler(async (req, res) => {
   );
 });
 
-// const changecurrentPassword = asyncHandler(async (req, res) => {
-//   const { username, email, currentPassword, newPassword } = req.body;
 
-//   const user = await User.findById(req.user._id);
-//   if (!user) {
-//     return res.status(404).json({
+const getWatchHistory = asyncHandler(async (req, res) => {
+  try {
+    // Step 1: Track user based on user ID from req.user
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    // Step 2: Aggregate user’s watch history and populate video + video.owner
+    const userData = await User.aggregate([
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(userId),
+        },
+      },
+      {
+        $lookup: {
+          from: "videos", // Name of your videos collection
+          localField: "watchHistory", // This is an array of video _id references
+          foreignField: "_id", // Match the _id field in videos collection
+          as: "watchHistory", // Embed full video documents in the result
+          pipeline: [
+            {
+              $lookup: {
+                from: "users", // Lookup video owners
+                localField: "owner", // Video's owner field
+                foreignField: "_id", // Match against the users collection
+                as: "owner", // Store owner details in 'owner' array
+                pipeline: [
+                  {
+                    $project: {
+                      fullname: 1,
+                      username: 1,
+                      avatar: 1,
+                    },
+                  },
+                ],
+              },
+            },
+            {
+              $addFields: {
+                owner: { $arrayElemAt: ["$owner", 0] }, // Flatten owner array
+              },
+            },
+          ],
+        },
+      },
+      {
+        $project: {
+          watchHistory: 1, // Only include the watchHistory field
+        },
+      },
+    ]);
+
+    // Step 3: Handle if user/watchHistory not found
+    if (!userData || userData.length === 0 || !userData[0].watchHistory) {
+      return res.status(404).json({
+        success: false,
+        message: "No watch history found for this user",
+      });
+    }
+
+    // Step 4: Return successful response with watch history
+    return res.status(200).json({
+      success: true,
+      data: userData[0].watchHistory,
+      message: "Watch history fetched successfully",
+    });
+  } catch (error) {
+    console.error("Error in getWatchHistory:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+
+// const getWatchHistory = asyncHandler(async (req, res) => {
+//   try {
+//     // Step 1: Get sessionId from query or cookies
+//     const sessionId = req.query.sessionId || req.cookies.sessionId;
+
+//     if (!sessionId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Session ID is required",
+//       });
+//     }
+
+//     // Step 2: Find anonymous session document
+//     const sessionData = await WatchSession.findOne({ sessionId }).populate({
+//       path: "watchHistory",
+//       populate: {
+//         path: "owner",
+//         select: "fullname username avatar",
+//       },
+//     });
+
+//     if (!sessionData || !sessionData.watchHistory.length) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No watch history found for this session",
+//       });
+//     }
+
+//     // Step 3: Return full video details
+//     return res.status(200).json({
+//       success: true,
+//       data: sessionData.watchHistory,
+//       message: "Watch history fetched successfully",
+//     });
+//   } catch (error) {
+//     console.error("Error in getWatchHistory:", error);
+//     return res.status(500).json({
 //       success: false,
-//       message: "User not found",
+//       message: "Server error",
 //     });
 //   }
-
-//   const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
-//   console.log(isPasswordCorrect);
-//   if (!isPasswordCorrect) {
-//     return res.status(401).json({
-//       success: false,
-//       message: "Current password is incorrect",
-//     });
-//   }
-
-//   if (await bcrypt.compare(newPassword, user.password)) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "New password cannot be the same as the current password",
-//     });
-//   }
-
-//   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-//   if (!passwordRegex.test(newPassword)) {
-//     return res.status(400).json({
-//       success: false,
-//       message:
-//         "Password must include an uppercase, lowercase, number, and special character and be at least 8 characters",
-//     });
-//   }
-
-//   const passwordScore = zxcvbn(newPassword).score;
-//   if (passwordScore > 5) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "Password is too weak. Try something more secure.",
-//     });
-//   }
-
-//   if (!username || !email) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "Username and email are required",
-//     });
-//   }
-
-//   // ✅ Set raw password — let Mongoose pre-save middleware hash it
-//   user.password = newPassword;
-//   console.log(user.password);
-
-//   // ✅ Just save — Mongoose will hash the password automatically
-//   await user.save(); // Do NOT disable hooks or validation
-//   console.log(user.password);
-
-//   return res
-//     .status(200)
-//     .json(new ApiResponse(200, null, "Password changed successfully"));
 // });
+
+
+
+// CLEAR ENTIRE WATCH HISTORY
+const clearWatchHistory = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    return res.status(401).json(new ApiResponse(401, null, "Unauthorized"));
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { $set: { watchHistory: [] } },
+    { new: true }
+  );
+
+  if (!updatedUser) {
+    return res.status(404).json(new ApiResponse(404, null, "User not found"));
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Watch history cleared successfully"));
+});
+
+// REMOVE SPECIFIC VIDEO FROM WATCH HISTORY
+const removeWatchHistoryVideo = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { videoId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(videoId)) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid video ID"));
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { $pull: { watchHistory: videoId } },
+    { new: true }
+  );
+
+  if (!updatedUser) {
+    return res.status(404).json(new ApiResponse(404, null, "User not found"));
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "Video removed from watch history"));
+});
+
+
+
+// Add to Watch Later
+export const addToWatchLater = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+
+ if (!mongoose.Types.ObjectId.isValid(videoId)) {
+    throw new ApiError(400, "Invalid video ID");
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) throw new ApiError(404, "User not found");
+
+  if (user.watchLater.includes(videoId)) {
+    return res.status(200).json(new ApiResponse(200, {}, "Video already in Watch Later"));
+  }
+
+  user.watchLater.push(videoId);
+  await user.save();
+
+  return res.status(200).json(new ApiResponse(200, {}, "Video added to Watch Later"));
+});
+
+// Remove from Watch Later
+export const removeFromWatchLater = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+
+  await User.findByIdAndUpdate(
+    req.user._id,
+    { $pull: { watchLater: videoId } },
+    { new: true }
+  );
+
+  return res.status(200).json(new ApiResponse(200, {}, "Video removed from Watch Later"));
+});
+
+// Get Watch Later list
+export const getWatchLater = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).populate({
+    path: "watchLater",
+    populate: { path: "owner", select: "username avatar" },
+  });
+
+  return res.status(200).json(new ApiResponse(200, { videos: user.watchLater }, "Watch Later fetched"));
+});
+
 
 
 
@@ -1244,7 +1376,9 @@ const loginUser = asyncHandler(async (req, res) => {
     getPlaylistById,
     getUserChannel,
     getUserChannelById,
-    getwatchHistory
+    getWatchHistory,
+    clearWatchHistory,
+    removeWatchHistoryVideo
 }
 
 

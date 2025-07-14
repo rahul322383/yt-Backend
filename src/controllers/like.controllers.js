@@ -7,44 +7,67 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
-
+// ---------- Like Logic ----------
 const likeEntity = async ({ userId, targetId, model, field }) => {
   const target = await model.findById(targetId);
   if (!target) {
-    return { liked: false, message: `${field.charAt(0).toUpperCase() + field.slice(1)} not found` };
+    return {
+      liked: false,
+      message: `${field.charAt(0).toUpperCase() + field.slice(1)} not found`,
+    };
   }
 
   const likeExists = await Like.findOne({ likedBy: userId, [field]: targetId });
 
   if (likeExists) {
-    const likeCount = await Like.countDocuments({ [field]: targetId });
-    return { liked: true, likeCount, message: `Already liked this ${field}` };
+    const likeCount = await Like.countDocuments({ [field]: targetId, action: "like" });
+    return {
+      liked: true,
+      likeCount,
+      message: `Already liked this ${field}`,
+    };
   }
 
-  await Like.create({ likedBy: userId, [field]: targetId });
+  await Like.create({ likedBy: userId, [field]: targetId, action: "like" });
 
-  const likeCount = await Like.countDocuments({ [field]: targetId });
-  return { liked: true, likeCount, message: `${field} liked successfully` };
+  const likeCount = await Like.countDocuments({ [field]: targetId, action: "like" });
+  return {
+    liked: true,
+    likeCount,
+    message: `${field} liked successfully`,
+  };
 };
 
-
+// ---------- Dislike Logic ----------
 const dislikeEntity = async ({ userId, targetId, model, field }) => {
   const target = await model.findById(targetId);
   if (!target) {
-    return { liked: false, message: `${field.charAt(0).toUpperCase() + field.slice(1)} not found` };
+    return {
+      liked: false,
+      message: `${field.charAt(0).toUpperCase() + field.slice(1)} not found`,
+    };
   }
 
   const like = await Like.findOneAndDelete({ likedBy: userId, [field]: targetId });
 
-  const likeCount = await Like.countDocuments({ [field]: targetId });
+  const likeCount = await Like.countDocuments({ [field]: targetId, action: "like" });
 
   if (!like) {
-    return { liked: false, likeCount, message: `Not previously liked this ${field}` };
+    return {
+      liked: false,
+      likeCount,
+      message: `Not previously liked this ${field}`,
+    };
   }
 
-  return { liked: false, likeCount, message: `${field} like removed successfully` };
+  return {
+    liked: false,
+    likeCount,
+    message: `${field} like removed successfully`,
+  };
 };
 
+// ---------- Factory Handlers ----------
 const createLikeHandler = (type, model, field) =>
   asyncHandler(async (req, res) => {
     const targetId = req.params[`${type}Id`];
@@ -59,11 +82,10 @@ const createLikeHandler = (type, model, field) =>
       field,
     });
 
-    return res
-      .status(200)
-      .json(new ApiResponse(200, { likeCount: result.likeCount }, result.message));
+    return res.status(200).json(
+      new ApiResponse(200, { likeCount: result.likeCount }, result.message)
+    );
   });
-
 
 const createDislikeHandler = (type, model, field) =>
   asyncHandler(async (req, res) => {
@@ -79,12 +101,12 @@ const createDislikeHandler = (type, model, field) =>
       field,
     });
 
-    return res
-      .status(200)
-      .json(new ApiResponse(200, { likeCount: result.likeCount }, result.message));
+    return res.status(200).json(
+      new ApiResponse(200, { likeCount: result.likeCount }, result.message)
+    );
   });
 
-
+// ---------- Exported Controllers ----------
 export const likeVideo = createLikeHandler("video", Video, "video");
 export const dislikeVideo = createDislikeHandler("video", Video, "video");
 
@@ -94,161 +116,272 @@ export const dislikeComment = createDislikeHandler("comment", Comment, "comment"
 export const likeTweet = createLikeHandler("tweet", Tweet, "tweet");
 export const dislikeTweet = createDislikeHandler("tweet", Tweet, "tweet");
 
-
+// ---------- Get Liked Videos ----------
 export const getLikedVideos = asyncHandler(async (req, res) => {
   let { page = 1, limit = 10 } = req.query;
   page = Number(page);
   limit = Number(limit);
-
   const skip = (page - 1) * limit;
 
   const liked = await Like.find({
-    likedBy: req.user._id,
+    // likedBy: req.user._id,
     video: { $exists: true },
+    action: "like",
   })
     .skip(skip)
     .limit(limit)
     .populate({
       path: "video",
-      select: "title thumbnail views owner",
-      populate: { path: "owner", select: "username avatar" },
+      match: { status: { $ne: "deleted" } },
+      select: "title thumbnail views description createdAt updatedAt status genre tags videoUrl",
+      populate: {
+        path: "owner",
+        select: "username  email",
+      },
     })
     .sort({ createdAt: -1 })
     .lean();
 
-  const likedVideos = liked.filter((item) => item.video); // Exclude deleted videos
+  const likedVideos = liked.map((item) => item.video).filter(Boolean);
+
+  const totalLikedVideos = await Like.countDocuments({
+    // likedBy: req.user._id,
+    video: { $exists: true },
+    action: "like",
+  });
 
   return res.status(200).json(
-    new ApiResponse(200, {
-      likedVideos,
-      total: likedVideos.length,
-      page,
-      pages: Math.ceil(likedVideos.length / limit),
-    }, "Liked videos retrieved successfully")
+    new ApiResponse(
+      200,
+      {
+        likedVideos,
+        total: likedVideos.length,
+        page,
+        pages: Math.ceil(totalLikedVideos / limit),
+      },
+      "Liked videos retrieved successfully"
+    )
   );
 });
 
 
-
-
 export const getVideoLikeCount = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
-  
 
-  // Check if the videoId is a valid ObjectId
   if (!isValidObjectId(videoId)) {
-    return res
-      .status(400)
-      .json(new ApiResponse(400, null, "Invalid video ID"));
+    return res.status(400).json(new ApiResponse(400, null, "Invalid video ID"));
   }
 
-  // Find the video by ID
-  const video = await Video.findById(videoId);
+  try {
+    // Check if video exists
+    const video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json(new ApiResponse(404, null, "Video not found"));
+    }
 
-  // If the video is not found, return an error response
-  if (!video) {
-    return res
-      .status(404)
-      .json(new ApiResponse(404, null, "Video not found"));
+    // Count total likes & dislikes
+    const [likes, dislikes] = await Promise.all([
+      Like.countDocuments({ video: videoId, action: "like" }),
+      Like.countDocuments({ video: videoId, action: "dislike" }),
+    ]);
+
+    // Get recent 10 liked users with full info
+    const likedByDocs = await Like.find({ video: videoId, action: "like" })
+      .sort({ createdAt: -1 })
+      .limit(10)
+
+
+    const likedBy = likedByDocs.map(doc => doc.likedBy);
+
+    // Return data without needing login
+    return res.status(200).json(
+      new ApiResponse(200, {
+        likes,
+        dislikes,
+        hasDislikes: dislikes > 0,
+        likedBy
+      }, "Video like count retrieved")
+    );
+  } catch (error) {
+    console.error("Error fetching video like count:", error);
+    return res.status(500).json(new ApiResponse(500, null, "Server error"));
   }
-
-  // If the video is deleted, return an error response
-  if (video.status === "deleted") {
-    return res
-      .status(404)
-      .json(new ApiResponse(404, null, "Video not found"));
-  }
-
-  // Get the like count for the video
-  const likeCount = await Like.countDocuments({ video: videoId });
-
-  // Return a success response with the like count
-  return res
-    .status(200)
-    .json(new ApiResponse(200, { likeCount }, "Video like count retrieved"));
 });
 
 
 
+
+
+
+
+
+// ---------- Toggle Video Like ----------
+// controllers/like.controller.js
 // export const toggleVideoLike = asyncHandler(async (req, res) => {
 //   const { videoId } = req.params;
-//   console.log (videoId);
+//   const { action } = req.body; // 'like' | 'dislike'
 
+//   // ✅ Ensure user is authenticated
+//   if (!req.user || !req.user._id) {
+//     return res.status(401).json(new ApiResponse(401, null, "Unauthorized"));
+//   }
+//   console.log("User ID:", req.user._id);
+
+//   // ✅ Validate action
+//   if (!["like", "dislike"].includes(action)) {
+//     return res.status(400).json(new ApiResponse(400, null, "Invalid action"));
+//   }
+
+//   // ✅ Validate videoId
 //   if (!isValidObjectId(videoId)) {
-//     return res.status(400).json(new ApiError(400, "Invalid video ID"));
+//     return res.status(400).json(new ApiResponse(400, null, "Invalid video ID"));
 //   }
 
+//   // ✅ Find video
 //   const video = await Video.findById(videoId);
-//   if (video.status === "deleted")
-//     return res.status(404).json(new ApiError(404, "Video not found"));
-
-//   const existingLike = await Like.findOne({ likedBy: req.user._id, video: videoId });
-
-//   let likeCount;
-
-//   if (existingLike) {
-//     await existingLike.deleteOne();
-//     likeCount = await Like.countDocuments({ video: videoId });
-//     return res.status(200).json(
-//       new ApiResponse(200, { liked: false, likeCount }, "Like removed")
-//     );
+//   if (!video || video.status === "deleted") {
+//     return res.status(404).json(new ApiResponse(404, null, "Video not found"));
 //   }
 
-//   await Like.create({ likedBy: req.user._id, video: videoId });
-//   likeCount = await Like.countDocuments({ video: videoId });
+//   // ✅ Check if user already liked/disliked
+//   const existing = await Like.findOne({
+//     likedBy: req.user._id,
+//     video: videoId,
+//   });
 
-//   return res.status(201).json(
-//     new ApiResponse(201, { liked: true, likeCount }, "Video liked")
+//   if (existing) {
+//     if (existing.action === action) {
+//       // User clicked again → remove like/dislike
+//       await existing.deleteOne();
+//     } else {
+//       // Switch between like <-> dislike
+//       existing.action = action;
+//       await existing.save();
+//     }
+//   } else {
+//     // New like/dislike
+//     await Like.create({
+//       likedBy: req.user._id,
+//       video: videoId,
+//       action,
+//     });
+//   }
+
+//   // ✅ Count updated likes/dislikes
+//   const [likes, dislikes] = await Promise.all([
+//     Like.countDocuments({ video: videoId, action: "like" }),
+//     Like.countDocuments({ video: videoId, action: "dislike" }),
+//   ]);
+
+//   const userLike = await Like.findOne({
+//     video: videoId,
+//     likedBy: req.user._id,
+//   });
+
+//   return res.status(200).json(
+//     new ApiResponse(
+//       200,
+//       {
+//         likes,
+//         dislikes,
+//         upvoted: userLike?.action === "like",
+//         downvoted: userLike?.action === "dislike",
+//       },
+//       "Video like/dislike toggled"
+//     )
 //   );
 // });
 
 
 export const toggleVideoLike = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
+  const { action } = req.body;
+
+  if (!req.user?._id) {
+  throw new ApiError(401, "User must be logged in to like");
+}
+
+
+  if (!req.user || !req.user._id) {
+    return res.status(401).json(new ApiResponse(401, null, "Unauthorized"));
+  }
+  
+
+  if (!["like", "dislike"].includes(action)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid action"));
+  }
 
   if (!isValidObjectId(videoId)) {
-    return res.status(400).json(new ApiError(400, "Invalid video ID"));
+    return res.status(400).json(new ApiResponse(400, null, "Invalid video ID"));
   }
 
   const video = await Video.findById(videoId);
   if (!video || video.status === "deleted") {
-    return res.status(404).json(new ApiError(404, "Video not found"));
+    return res.status(404).json(new ApiResponse(404, null, "Video not found"));
   }
 
-  const existingLike = await Like.findOne({ likedBy: req.user._id, video: videoId });
+  const existing = await Like.findOne({ likedBy: req.user._id, video: videoId });
 
-  let likeCount;
-
-  if (existingLike) {
-    await existingLike.deleteOne();
-    likeCount = await Like.countDocuments({ video: videoId });
-    return res.status(200).json(
-      new ApiResponse(200, { liked: false, likeCount }, "Like removed")
-    );
+  if (existing) {
+    if (existing.action === action) {
+      await existing.deleteOne(); // Remove like/dislike
+    } else {
+      existing.action = action; // Switch like <-> dislike
+      await existing.save();
+    }
+  } else {
+    await Like.create({ likedBy: req.user._id, video: videoId, action });
   }
 
-  await Like.create({ likedBy: req.user._id, video: videoId });
-  likeCount = await Like.countDocuments({ video: videoId });
+  const [likes, dislikes] = await Promise.all([
+    Like.countDocuments({ video: videoId, action: "like" }),
+    Like.countDocuments({ video: videoId, action: "dislike" }),
+  ]);
+  
 
-  return res.status(201).json(
-    new ApiResponse(201, { liked: true, likeCount }, "Video liked")
+  const userLike = await Like.findOne({ video: videoId, likedBy: req.user._id });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        likes,
+        dislikes,
+        upvoted: userLike?.action === "like",
+        downvoted: userLike?.action === "dislike",
+      },
+      "Video like/dislike toggled"
+    )
   );
 });
 
 
 
+
+// controllers/video.controller.js
+
+
+
+
+
+
+
+
+
+
+// ---------- Admin Like Stats ----------
 export const getAdminLikeStats = asyncHandler(async (req, res) => {
   const totalLikes = await Like.countDocuments();
   const likesPerVideo = await Like.aggregate([
-    { $match: { video: { $exists: true } } },
+    { $match: { video: { $exists: true }, action: "like" } },
     { $group: { _id: "$video", count: { $sum: 1 } } },
     {
       $lookup: {
         from: "videos",
         localField: "_id",
         foreignField: "_id",
-        as: "videoDetails"
-      }
+        as: "videoDetails",
+      },
     },
     { $unwind: "$videoDetails" },
     {
@@ -256,16 +389,13 @@ export const getAdminLikeStats = asyncHandler(async (req, res) => {
         _id: 0,
         videoId: "$_id",
         title: "$videoDetails.title",
-        likeCount: "$count"
-      }
+        likeCount: "$count",
+      },
     },
-    { $sort: { likeCount: -1 } }
+    { $sort: { likeCount: -1 } },
   ]);
 
   return res.status(200).json(
-    new ApiResponse(200, {
-      totalLikes,
-      likesPerVideo
-    }, "Admin like analytics fetched")
+    new ApiResponse(200, { totalLikes, likesPerVideo }, "Admin like analytics fetched")
   );
 });

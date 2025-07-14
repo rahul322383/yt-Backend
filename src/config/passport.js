@@ -5,6 +5,9 @@ import GoogleStrategy from "passport-google-oauth20";
 import GitHubStrategy from "passport-github2";
 import FacebookStrategy from "passport-facebook";
 import {User} from "../models/user.model.js"; // your User model
+import dotenv from "dotenv";
+
+dotenv.config();
 // Save user into session
 passport.serializeUser((user, done) => {
   done(null, user.id);
@@ -57,22 +60,23 @@ passport.use(new GitHubStrategy({
 ));
 
 // Facebook
-passport.use(new FacebookStrategy({
-    clientID: process.env.FACEBOOK_CLIENT_ID,
-    clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
-    callbackURL: "/api/v1/users/oauth/facebook/callback",
-    profileFields: ['id', 'displayName', 'photos', 'email']
-  },
-  async (accessToken, refreshToken, profile, done) => {
-    let user = await User.findOne({ facebookId: profile.id });
-    if (!user) {
-      user = await User.create({
-        facebookId: profile.id,
-        username: profile.displayName,
-        email: profile.emails?.[0]?.value,
-        avatar: profile.photos?.[0]?.value
-      });
-    }
-    return done(null, user);
-  }
-));
+// passport.use(new FacebookStrategy({
+//     clientID: process.env.FACEBOOK_CLIENT_ID,
+//     clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+//     callbackURL: "/api/v1/users/oauth/facebook/callback",
+//     profileFields: ['id', 'displayName', 'photos', 'email']
+//   },
+//   async (accessToken, refreshToken, profile, done) => {
+//     let user = await User.findOne({ facebookId: profile.id });
+//     if (!user) {
+//       user = await User.create({
+//         facebookId: profile.id,
+//         username: profile.displayName,
+//         email: profile.emails?.[0]?.value,
+//         avatar: profile.photos?.[0]?.value
+//       });
+//     }
+//     return done(null, user);
+//   }
+// ));
+

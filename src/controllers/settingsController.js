@@ -1,155 +1,170 @@
-import { connect } from 'mongoose';
-import { User } from '../models/user.model.js';
-import {asyncHandler} from '../utils/asyncHandler.js';
+import { User } from "../models/user.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 const allowedCategories = [
-  'account',
-  'advancedSettings',
-  'billing',
-  'connectedApps',
-  'downloads',
-  'notification',
-  'placeholder',
-  'playback',
-  'privacy'
+  "account",
+  "notifications",
+  "privacy",
+  "appearance",
+  "language",
+  "security",
+  "apps",
+  "billing",
+  "advanced",
+  "blocklist",
 ];
 
-export const updateSettings = async (req, res, next) => {
-  try {
-    const userId = req.user._id;
-    const category = req.params.category;
+// GET: Single Category
+export const getSettings = asyncHandler(async (req, res) => {
+  const category = req.params.category;
+  const userId = req.user._id;
 
-    if (!allowedCategories.includes(category)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid settings category',
-      });
-    }
-
-    const updatePayload = req.body;
-
-    if (typeof updatePayload !== 'object' || Array.isArray(updatePayload)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid payload format',
-      });
-    }
-
-    const update = {
-      [`settings.${category}`]: updatePayload,
-    };
-
-    const updatedUser = await User.findByIdAndUpdate(userId, update, {
-      new: true,
-    });
-
-    let toastMessage = `${category} settings updated successfully.`;
-    if (category === 'notification' && updatePayload.sms !== undefined) {
-      toastMessage += updatePayload.sms
-        ? ' SMS alerts enabled.'
-        : ' SMS alerts disabled.';
-    }
-
-    res.status(200).json({
-      success: true,
-      message: toastMessage,
-      data: updatedUser.settings?.[category] || {},
-    });
-  } catch (error) {
-    console.error('Settings update error:', error);
-    res.status(500).json({
+  if (!allowedCategories.includes(category)) {
+    return res.status(400).json({
       success: false,
-      message: 'Server error while updating settings',
+      message: "Invalid settings category",
     });
   }
-};
 
-export const getSettings = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
   const user = await User.findById(userId).lean();
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "User not found",
+    });
+  }
+
+  const settings = user.settings?.[category] || {};
+
+  res.status(200).json({
+    success: true,
+    message: `${category} settings fetched successfully.`,
+    data: settings,
+  });
+});
+
+// PUT: Update Single Category
+export const updateSettings = asyncHandler(async (req, res) => {
+  const category = req.params.category;
+  const userId = req.user._id;
+
+  if (!allowedCategories.includes(category)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid settings category",
+    });
+  }
+
+  const updatePayload = req.body;
+
+  if (typeof updatePayload !== "object" || Array.isArray(updatePayload)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid payload format",
+    });
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { [`settings.${category}`]: updatePayload },
+    { new: true }
+  );
+
+  res.status(200).json({
+    success: true,
+    message: `${category} settings updated successfully.`,
+    data: updatedUser.settings?.[category] || {},
+  });
+});
+
+// DELETE: Clear Single Category
+export const deleteSettings = asyncHandler(async (req, res) => {
+  const category = req.params.category;
+  const userId = req.user._id;
+
+  if (!allowedCategories.includes(category)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid settings category",
+    });
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { [`settings.${category}`]: {} },
+    { new: true }
+  );
+
+  res.status(200).json({
+    success: true,
+    message: `${category} settings cleared successfully.`,
+    data: updatedUser.settings?.[category] || {},
+  });
+});
+
+// GET: All Settings
+export const getAllSettings = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const user = await User.findById(userId).select("settings").lean();
 
   if (!user) {
     return res.status(404).json({
       success: false,
-      message: 'User not found',
+      message: "User not found",
     });
   }
 
-  const settings = user.settings || {};
+  const structured = {};
+  allowedCategories.forEach((key) => {
+    structured[key] = user.settings?.[key] || {};
+  });
 
-  return res.status(200).json({
+  res.status(200).json({
     success: true,
-    message: 'Settings retrieved successfully',
-    data: {
-      playback: settings.playback || {},
-      notifications: settings.notifications || {},
-      downloads: settings.downloads || {},
-      privacy: settings.privacy || {},
-      billing: settings.billing || {},
-      advancedSettings: settings.advancedSettings || {},
-      placeholder: settings.placeholder || {},
-      connectedApps: settings.connectedApps || {},
-      account: settings.account || {},
-      // Add the rest of your setting sections safely
-    },
+    message: "All settings fetched successfully",
+    data: structured,
   });
 });
 
-export const deleteSettings = async (req, res, next) => {
-  try {
-    const userId = req.user._id;
-    const category = req.params.category;
+// PUT: Update All Settings
+export const updateAllSettings = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const updatePayload = req.body;
 
-    if (!allowedCategories.includes(category)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid settings category',
-      });
-    }
-
-    const update = {
-      [`settings.${category}`]: null,
-    };
-
-    const updatedUser = await User.findByIdAndUpdate(userId, update, {
-      new: true,
-    });
-
-    res.status(200).json({
-      success: true,
-      message: `${category} settings deleted successfully.`,
-      data: updatedUser.settings[category],
-    });
-  } catch (error) {
-    console.error('Settings deletion error:', error);
-    res.status(500).json({
+  if (typeof updatePayload !== "object" || Array.isArray(updatePayload)) {
+    return res.status(400).json({
       success: false,
-      message: 'Server error while deleting settings',
+      message: "Invalid payload format",
     });
   }
-};
-export const getAllSettings = async (req, res, next) => {
-  try {
-    const userId = req.user._id;
 
-    const user = await User.findById(userId).select('settings');
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { settings: updatePayload },
+    { new: true }
+  );
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
-    }
+  res.status(200).json({
+    success: true,
+    message: "All settings updated successfully",
+    data: updatedUser.settings || {},
+  });
+});
 
-    res.status(200).json({
-      success: true,
-      data: user.settings,
-    });
-  } catch (error) {
-    console.error('Settings retrieval error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error while retrieving settings',
-    });
-  }
-};
+// DELETE: All Settings
+export const deleteAllSettings = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { settings: {} },
+    { new: true }
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "All settings deleted successfully",
+    data: updatedUser.settings || {},
+  });
+});

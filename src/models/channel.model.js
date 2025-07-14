@@ -1,51 +1,51 @@
-import mongoose from 'mongoose';
-import { User } from './user.model.js';
+import mongoose from 'mongoose';  
 import { v4 as uuidv4 } from 'uuid';
+
 
 const channelSchema = new mongoose.Schema(
   {
+    _id: {
+      type: String,
+      default: () => `channel_${uuidv4().slice(0, 12)}`,
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      unique: true // One channel per user
-    },
-    channelId: {
-      type: String,
-      required: true,
       unique: true,
-      default: () => `channel_${uuidv4().slice(0, 12)}`, // Automatically generates a channelId
     },
     name: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
     description: {
       type: String,
-      default: ''
+      default: '',
     },
     avatar: {
       type: String,
-      default: ''
+      default: '',
     },
     banner: {
       type: String,
-      default: ''
+      default: '',
     },
     subscribersCount: {
       type: Number,
-      default: 0
+      default: 0,
     },
     isVerified: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
   },
   {
-    timestamps: true
+    timestamps: true,
+    _id: false, // We handle _id ourselves as string
   }
 );
+
 
 // Optional: Add a compound index to speed up lookups
 channelSchema.index({ channelId: 1, user: 1 });

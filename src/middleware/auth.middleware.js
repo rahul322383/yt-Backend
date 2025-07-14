@@ -20,14 +20,16 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
 
   // No token found
   if (!token) {
-    throw new ApiError(401, "Unauthorized: No token provided");
+  
+    return res.status(401).json({ success: false, message: "Unauthorized: No token provided" });
   }
 
   try {
     const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
     if (!decoded?._id) {
-      throw new ApiError(401, "Invalid token payload");
+      
+      return res.status(401).json({ success: false, message: "Invalid token payload" });
     }
 
     const user = await User.findById(decoded._id).select(
@@ -35,7 +37,8 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
     );
 
     if (!user) {
-      throw new ApiError(404, "User not found");
+     
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     req.user = user; // attach user to req

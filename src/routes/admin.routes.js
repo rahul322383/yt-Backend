@@ -1,25 +1,48 @@
 import express from "express";
-import  admin  from "../middleware/admin.middleware.js";
-import {verifyJWT} from "../middleware/auth.middleware.js";
 import {
-    getAllUsers,
-    exportUsersCSV,
-    getUserById,
-    updateUserByAdmin,
-    deleteUserByAdmin,
-    toggleUserActiveStatus
-  } from "../controllers/admin.controllers.js";
-  
+  adminLogin,
+  adminDashboard,
+  adminLogout,
+  getAdminStats,
+  getAllUsers,
+  getUserById,
+  deleteUser,
+  updateUser,
+  getReportedComments,
+  resolveReportedComment,
+  blockUser,
+  getAllVideos,
+  getAllComments,
+} from "../controllers/admin.controllers.js";
+
+import admin from "../middleware/admin.middleware.js";
 
 const router = express.Router();
-router.use(verifyJWT , admin);
 
-router.get('', admin, getAllUsers);
-router.get('/users/export/csv', admin, exportUsersCSV);
-router.get('/users/:userId', admin, getUserById);
-router.put('/users/:userId', admin, updateUserByAdmin);
-router.delete('/users/:userId', admin, deleteUserByAdmin);
-router.patch('/users/:userId/toggle-active', admin, toggleUserActiveStatus);
+// Auth
+router.post("/login", adminLogin);
+router.post("/logout", admin, adminLogout);
 
+// Dashboard & Stats
+router.get("/dashboard", admin, adminDashboard);
+router.get("/stats", admin, getAdminStats);
+
+// Users
+router.get("/users", admin, getAllUsers);
+router.get("/users/:id", admin, getUserById);
+router.patch("/users/:id", admin, updateUser);
+router.delete("/users/:id", admin, deleteUser);
+router.post("/block-user/:userId", admin, blockUser);
+
+// Videos
+router.get("/videos", admin, getAllVideos);
+
+// Comments
+router.get("/reported-comments", admin, getReportedComments);
+router.post("/resolve-comment/:commentId", admin, resolveReportedComment);
+
+// You can add more admin routes here (videos, playlists, etc.)
+//view comments
+router.get("/comments", admin, getAllComments); // Example route for getting all comments
 
 export default router;

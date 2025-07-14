@@ -7,7 +7,7 @@ const subscriptionSchema = new mongoose.Schema({
     required: true,
   },
   channel: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,
     ref: "User",
     required: true,
   },
@@ -19,6 +19,9 @@ const subscriptionSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-subscriptionSchema.index({ subscriber: 1, channel: 1 }, { unique: true });
+// subscriptionSchema.index({ subscriber: 1, channel: 1 }, { unique: true });
+subscriptionSchema.index({ user: 1, channel: 1 }, { unique: true, sparse: true });
+subscriptionSchema.index({ sessionId: 1, channel: 1 }, { unique: true, sparse: true });
+
 
 export const Subscription = mongoose.model("Subscription", subscriptionSchema);

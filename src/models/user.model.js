@@ -3,12 +3,21 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import crypto from "crypto"; // ✅ Needed for `crypto.randomUUID`
 
+
 const userSchema = new Schema(
   {
     signupType: {
       type: String,
       enum: ["email", "google", "github", "facebook"],
       default: "email"
+    },
+    isAdmin: {
+  type: Boolean,
+  default: true // Default to true for admin users
+},
+    isBlocked: {
+      type: Boolean,
+      default: false
     },
     providerId: {
       type: String,
@@ -24,7 +33,7 @@ const userSchema = new Schema(
     },
     email: {
       type: String,
-      required: false, // optional for testing
+      required: true, // optional for testing
       unique: true,
       trim: true,
       lowercase: true 
@@ -46,9 +55,8 @@ const userSchema = new Schema(
     },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
+    otpRequestedAt: Date, // for rate limiting
     isOtpVerified: { type: Boolean, default: false },
-
-
     coverImage: {
       type: String
     },
@@ -63,13 +71,21 @@ const userSchema = new Schema(
       required: true,
       default: () => `channel_${crypto.randomUUID().slice(0, 12)}`
     },
-    watchHistory: {
-      type: Schema.Types.ObjectId,
+    watchHistory: [{
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Video"
-    },
+    }],
+   
+lastWatchedAt: Date
+    ,
+    
     refreshToken: {
       type: String
-    }
+    },
+     watchLater: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
+    likedVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
+    dislikedVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
+
   },
   {
     timestamps: true
@@ -96,7 +112,9 @@ userSchema.methods.generateAccessToken = function () {
       _id: this._id,
       email: this.email,
       username: this.username,
-      fullName: this.fullName
+      fullName: this.fullName,
+      channelId: this.channelId,
+      role: this.isAdmin ? "admin" : "user" // Add role based on isAdmin
     },
     process.env.ACCESS_TOKEN_SECRET,
     {

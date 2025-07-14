@@ -30,6 +30,27 @@ const settingsSchema = new mongoose.Schema({
     quality: { type: String, default: 'auto' },
     subtitles: { type: Boolean, default: true }
   },
+  security: {
+    twoFactorAuth: { type: Boolean, default: false },
+    passwordChangeRequired: { type: Boolean, default: false }
+  },
+  appearance: {
+    theme: { type: String, default: 'light' },
+    fontSize: { type: String, default: 'medium' }
+  },
+  language: {
+    preferredLanguage: { type: String, default: 'en' }
+  },
+  blocklist: {
+    blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    blockedChannels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Channel' }]
+  },
+  history: {
+    watchedVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Video' }],
+    watchedTweets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tweet' }]
+  },
+  apps: [{ type: String }],
+  experimental: { type: Boolean, default: false },
   privacy: {
     showProfilePicture: { type: Boolean, default: true },
     allowMessages: { type: Boolean, default: true }

@@ -14,8 +14,14 @@ import {
   updateUserAvatar,
   updateUserCoverImage,
   getUserChannel,
-  getwatchHistory,
-  getUserChannelById
+  getWatchHistory,
+  getUserChannelById,
+  clearWatchHistory,
+  removeWatchHistoryVideo,
+  addToWatchLater,
+  removeFromWatchLater,
+  getWatchLater,
+  socialLogin,
 } from "../controllers/user.controllers.js";
 
 import {
@@ -50,12 +56,17 @@ router.post(
   ]),
   registerUser
 );
-
+// 
+router.get("/", getWatchHistory);
 // 🔐 Login / Logout / Token Management
 router.post("/login", loginUser);
 router.post("/logout", verifyJWT, logoutUser);
 router.post("/refresh-token", refreshAccessToken);
 router.post("/change-password", verifyJWT, changecurrentPassword);
+// 🔗 Social Login (Google, GitHub, Facebook)
+router.get("/auth/google",  socialLogin);
+router.get("/auth/github",  socialLogin);
+router.get("/auth/facebook",  socialLogin);
 
 // 🔁 Forgot/Reset Password
 router.post("/forget-password", forgotPassword);
@@ -74,12 +85,24 @@ router.put("/update-cover", verifyJWT, upload.single("coverImage"), updateUserCo
 
 /* -------------------- Channel & Watch History Routes -------------------- */
 
-router.get("/c/:username", verifyJWT, getUserChannel);
-router.get("/c/:channelId", verifyJWT, getUserChannelById);
-router.get("/watch-history", verifyJWT, getwatchHistory);
+// router.get("/c/:username", verifyJWT, getUserChannel);
+// router.get("/c/:channelId", verifyJWT, getUserChannelById);
 
+router.get("/c/:username",  getUserChannel);
+router.get("/channel/:channelId", getUserChannelById);
+router.get("/watch-history", verifyJWT, getWatchHistory);
+router.delete("/clear-watch-history", verifyJWT, clearWatchHistory);
+router.delete("/remove-watch-history/:videoId", verifyJWT, removeWatchHistoryVideo);
 /* ---------------------- Playlist Video Upload Route --------------------- */
 // ⚠️ If needed separately (outside playlist.routes)
-router.post("/playlist/:playlistId/videos", upload.single("video"), addVideoToPlaylist);
+// router.post("/playlist/:playlistId/videos", upload.fields([{ name: "video", maxCount: 1 }]), addVideoToPlaylist);
+
+router.post("/playlist/:playlistId/videos", upload.fields([{ name: 'video' }, { name: 'thumbnail' }]), addVideoToPlaylist);
+
+
+
+router.get("/watch-later", verifyJWT, getWatchLater);
+router.post("/watch-later/:videoId", verifyJWT, addToWatchLater);
+router.delete("/watch-later/:videoId", verifyJWT, removeFromWatchLater);
 
 export default router;
