@@ -25,7 +25,7 @@ router.use(verifyJWT);
 // ✅ PUBLIC ROUTE – accessible without token
 
 router.post("/videos/:videoId/toggle-like",verifyJWT,toggleVideoLike);
-router.get("/videos/liked-videos", getLikedVideos);
+router.get("/videos/liked-videos",verifyJWT, getLikedVideos);
 
 
 

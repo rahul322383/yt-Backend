@@ -1356,6 +1356,17 @@ export const getWatchLater = asyncHandler(async (req, res) => {
 });
 
 
+// get liked video
+export const getLikedVideos = asyncHandler(async (req, res) => {
+
+  const user = await User.findById(req.user._id).populate({
+    path: "likedVideos",
+    populate: { path: "owner", select: "username avatar" },
+  });
+
+  return res.status(200).json(new ApiResponse(200, { videos: user.likedVideos }, "Liked videos fetched"));
+});
+
 
 
 

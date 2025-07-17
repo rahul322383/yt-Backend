@@ -18,10 +18,10 @@ import { verifyJWT } from "../middleware/auth.middleware.js";
 const router = express.Router();
 
 // 🔓 PUBLIC ROUTES FIRST
-router.get("/videos/:videoId",verifyJWT, getVideoById);              // Public
+router.get("/videos/:videoId", getVideoById);              // Public
 router.get("/videos/:videoId/watch", getAndTrackVideo);    // Public
 router.get("/play/:videoId", playVideoById);
-router.post("/like/:videoId", likeVideos);
+
 
 // 🔒 PROTECTED ROUTES BELOW THIS LINE
 
@@ -34,6 +34,7 @@ router.get("/", getAllVideos);
 // 🔹 Upload video
 // router.post("/:playlistId/videos", upload.fields([{ name: "video", maxCount: 1 }]), publishAVideo);
 
+router.post("/like/:videoId",verifyJWT,likeVideos);
 
 router.put("/videos/update/:videoId", updateVideo);
 router.delete("/videos/:videoId", deleteVideo);

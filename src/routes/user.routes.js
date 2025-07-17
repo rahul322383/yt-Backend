@@ -22,6 +22,7 @@ import {
   removeFromWatchLater,
   getWatchLater,
   socialLogin,
+  getLikedVideos,
 } from "../controllers/user.controllers.js";
 
 import {
@@ -104,5 +105,7 @@ router.post("/playlist/:playlistId/videos", upload.fields([{ name: 'video' }, { 
 router.get("/watch-later", verifyJWT, getWatchLater);
 router.post("/watch-later/:videoId", verifyJWT, addToWatchLater);
 router.delete("/watch-later/:videoId", verifyJWT, removeFromWatchLater);
+router.get("/liked-video", verifyJWT, getLikedVideos);
+
 
 export default router;

@@ -854,9 +854,66 @@ export const getAndTrackVideo = asyncHandler(async (req, res) => {
 
 
 
+// export const likeVideos = async (req, res) => {
+//   const { videoId } = req.params;
+//   const { userId } = req.body;
+
+//   if (!videoId || !userId) {
+//     return res.status(400).json({ msg: "Video ID and User ID are required" });
+//   }
+
+//   try {
+//     const video = await Video.findById(videoId).populate({
+//       path: "user",
+//       select: "_id username", // only fetch what's needed
+//     });
+
+//     if (!video) {
+//       return res.status(404).json({ msg: "Video not found" });
+//     }
+   
+
+//     const alreadyLiked = video.likes.includes(userId);
+
+//     if (alreadyLiked) {
+//       // Remove like
+//       video.likes = video.likes.filter(id => id.toString() !== userId);
+//     } else {
+//       // Add like
+//       video.likes.push(userId);
+
+//       // Safe check before sending notification
+//       if (video.user && video.user._id) {
+//         try {
+//           sendNotification(
+//             req.app,
+//             video.user._id.toString(),
+//             `Your video "${video.title}" got a new like ❤️`
+//           );
+//         } catch (notifyErr) {
+//           console.error("Notification error:", notifyErr);
+//         }
+//       } else {
+//         console.warn("No video.user found. Skipping notification.");
+//       }
+//     }
+
+//     await video.save();
+
+//     return res.status(200).json({
+//       msg: alreadyLiked ? "Like removed" : "Liked and notification sent",
+//       likesCount: video.likes.length,
+//     });
+//   } catch (err) {
+//     console.error("Error liking video:", err);
+//     return res.status(500).json({ msg: "Internal error" });
+//   }
+// };
+
+
 export const likeVideos = async (req, res) => {
   const { videoId } = req.params;
-  const { userId } = req.body;
+  const userId = req.user._id;
 
   if (!videoId || !userId) {
     return res.status(400).json({ msg: "Video ID and User ID are required" });
@@ -865,25 +922,21 @@ export const likeVideos = async (req, res) => {
   try {
     const video = await Video.findById(videoId).populate({
       path: "user",
-      select: "_id username", // only fetch what's needed
+      select: "_id username",
     });
 
     if (!video) {
       return res.status(404).json({ msg: "Video not found" });
     }
-   
 
-    const alreadyLiked = video.likes.includes(userId);
+    const alreadyLiked = video.likes.includes(userId.toString());
 
     if (alreadyLiked) {
-      // Remove like
-      video.likes = video.likes.filter(id => id.toString() !== userId);
+      video.likes = video.likes.filter(id => id.toString() !== userId.toString());
     } else {
-      // Add like
-      video.likes.push(userId);
+      video.likes.push(userId.toString());
 
-      // Safe check before sending notification
-      if (video.user && video.user._id) {
+      if (video.user && video.user._id.toString() !== userId.toString()) {
         try {
           sendNotification(
             req.app,
@@ -891,10 +944,8 @@ export const likeVideos = async (req, res) => {
             `Your video "${video.title}" got a new like ❤️`
           );
         } catch (notifyErr) {
-          console.error("Notification error:", notifyErr);
+          console.error("Notification error:", notifyErr.message);
         }
-      } else {
-        console.warn("No video.user found. Skipping notification.");
       }
     }
 
@@ -905,7 +956,10 @@ export const likeVideos = async (req, res) => {
       likesCount: video.likes.length,
     });
   } catch (err) {
-    console.error("Error liking video:", err);
+    console.error("Error liking video:", err.message);
     return res.status(500).json({ msg: "Internal error" });
   }
 };
+
+
+

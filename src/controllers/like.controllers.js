@@ -117,52 +117,52 @@ export const likeTweet = createLikeHandler("tweet", Tweet, "tweet");
 export const dislikeTweet = createDislikeHandler("tweet", Tweet, "tweet");
 
 // ---------- Get Liked Videos ----------
-export const getLikedVideos = asyncHandler(async (req, res) => {
-  let { page = 1, limit = 10 } = req.query;
-  page = Number(page);
-  limit = Number(limit);
-  const skip = (page - 1) * limit;
+// export const getLikedVideos = asyncHandler(async (req, res) => {
+//   let { page = 1, limit = 10 } = req.query;
+//   page = Number(page);
+//   limit = Number(limit);
+//   const skip = (page - 1) * limit;
 
-  const liked = await Like.find({
-    // likedBy: req.user._id,
-    video: { $exists: true },
-    action: "like",
-  })
-    .skip(skip)
-    .limit(limit)
-    .populate({
-      path: "video",
-      match: { status: { $ne: "deleted" } },
-      select: "title thumbnail views description createdAt updatedAt status genre tags videoUrl",
-      populate: {
-        path: "owner",
-        select: "username  email",
-      },
-    })
-    .sort({ createdAt: -1 })
-    .lean();
+//   const liked = await Like.find({
+//     // likedBy: req.user._id,
+//     video: { $exists: true },
+//     action: "like",
+//   })
+//     .skip(skip)
+//     .limit(limit)
+//     .populate({
+//       path: "video",
+//       match: { status: { $ne: "deleted" } },
+//       select: "title thumbnail views description createdAt updatedAt status genre tags videoUrl",
+//       populate: {
+//         path: "owner",
+//         select: "username  email",
+//       },
+//     })
+//     .sort({ createdAt: -1 })
+//     .lean();
 
-  const likedVideos = liked.map((item) => item.video).filter(Boolean);
+//   const likedVideos = liked.map((item) => item.video).filter(Boolean);
 
-  const totalLikedVideos = await Like.countDocuments({
-    // likedBy: req.user._id,
-    video: { $exists: true },
-    action: "like",
-  });
+//   const totalLikedVideos = await Like.countDocuments({
+//     // likedBy: req.user._id,
+//     video: { $exists: true },
+//     action: "like",
+//   });
 
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      {
-        likedVideos,
-        total: likedVideos.length,
-        page,
-        pages: Math.ceil(totalLikedVideos / limit),
-      },
-      "Liked videos retrieved successfully"
-    )
-  );
-});
+//   return res.status(200).json(
+//     new ApiResponse(
+//       200,
+//       {
+//         likedVideos,
+//         total: likedVideos.length,
+//         page,
+//         pages: Math.ceil(totalLikedVideos / limit),
+//       },
+//       "Liked videos retrieved successfully"
+//     )
+//   );
+// });
 
 
 export const getVideoLikeCount = asyncHandler(async (req, res) => {
@@ -210,6 +210,57 @@ export const getVideoLikeCount = asyncHandler(async (req, res) => {
 
 
 
+// Controller: Get liked videos of the logged-in user
+export const getLikedVideos = asyncHandler(async (req, res) => {
+  let { page = 1, limit = 10 } = req.query;
+  page = Number(page);
+  limit = Number(limit);
+  const skip = (page - 1) * limit;
+
+  // Step 1: Fetch likes by the logged-in user, where the liked item is a video
+  const liked = await Like.find({
+    likedBy: req.user._id, // ✅ Only current user
+    video: { $exists: true },
+    action: "like",
+  })
+    .skip(skip)
+    .limit(limit)
+    .populate({
+      path: "video",
+      match: { status: { $ne: "deleted" } }, // ✅ Exclude deleted videos
+      select:
+        "title thumbnail views description createdAt updatedAt status genre tags videoUrl",
+      populate: {
+        path: "owner",
+        select: "username email avatar", // Add avatar if needed
+      },
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  // Step 2: Filter out null videos (in case some videos were deleted)
+  const likedVideos = liked.map((item) => item.video).filter(Boolean);
+
+  // Step 3: Count total liked videos for this user
+  const totalLikedVideos = await Like.countDocuments({
+    likedBy: req.user._id,
+    video: { $exists: true },
+    action: "like",
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        likedVideos,
+        total: totalLikedVideos,
+        page,
+        pages: Math.ceil(totalLikedVideos / limit),
+      },
+      "Liked videos retrieved successfully"
+    )
+  );
+});
 
 
 

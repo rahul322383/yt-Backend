@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "nodemon -r dotenv/config --experimental-json-modules  src/index.js",
     "start": "nodemon src/index.js",
-    "build": "node src/index.js"
+   "build": "esbuild src/index.js --bundle --platform=node --outdir=dist --loader:.html=text --external:@mapbox/node-pre-gyp --external:aws-sdk --external:nock --external:mock-aws-s3 --external:express --external:mongoose"
   },
   "keywords": [
     "javascript",
@@ -16,6 +16,7 @@
   "author": "rahul",
   "license": "ISC",
   "devDependencies": {
+    "esbuild": "^0.25.6",
     "nodemon": "^3.1.9",
     "prettier": "^3.5.1"
   },

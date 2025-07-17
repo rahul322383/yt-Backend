@@ -13,8 +13,8 @@ export const adminLogin = async (req, res) => {
 
     const user = await User.findOne({ email }).select("+password +username");
     if (!user && username) {
-      // If username is provided, try to find by username
-      user = await User.findOne({ username }).select("+password +email");
+      return res.status(401).json({ message: "Invalid email or password", success: false });
+  
     }
     // console.log("User found:", user);
     if (!user) {
