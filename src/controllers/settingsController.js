@@ -14,10 +14,11 @@ const allowedCategories = [
   "blocklist",
 ];
 
+const publicAccessibleCategories = ["appearance", "language"];
+
 // GET: Single Category
 export const getSettings = asyncHandler(async (req, res) => {
   const category = req.params.category;
-  const userId = req.user._id;
 
   if (!allowedCategories.includes(category)) {
     return res.status(400).json({
@@ -26,7 +27,23 @@ export const getSettings = asyncHandler(async (req, res) => {
     });
   }
 
-  const user = await User.findById(userId).lean();
+  if (publicAccessibleCategories.includes(category)) {
+    const publicUser = await User.findOne({ isDefault: true }).select(`settings.${category}`).lean();
+    return res.status(200).json({
+      success: true,
+      message: `${category} settings (public) fetched successfully.`,
+      data: publicUser?.settings?.[category] || {},
+    });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: "Authentication required for this category",
+    });
+  }
+
+  const user = await User.findById(req.user._id).select(`settings.${category}`).lean();
   if (!user) {
     return res.status(404).json({
       success: false,
@@ -34,12 +51,10 @@ export const getSettings = asyncHandler(async (req, res) => {
     });
   }
 
-  const settings = user.settings?.[category] || {};
-
   res.status(200).json({
     success: true,
     message: `${category} settings fetched successfully.`,
-    data: settings,
+    data: user.settings?.[category] || {},
   });
 });
 

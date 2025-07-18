@@ -10,7 +10,7 @@ import { verifyJWT } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-router.use(verifyJWT); // Apply JWT verification middleware to all routes in this router
+// router.use(verifyJWT); // Apply JWT verification middleware to all routes in this router
 
 
 router.get('/', getAllSettings); // GET all settings
