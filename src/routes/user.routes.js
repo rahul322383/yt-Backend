@@ -23,6 +23,16 @@ import {
   getWatchLater,
   socialLogin,
   getLikedVideos,
+  deleteAvatar,
+  deleteCoverImage,
+  setup2FA,
+  verify2FACode,
+  disable2FA,
+  deleteAccount,
+  getAuthUrl,
+  handleCallback,
+  disconnectYouTube,
+  checkYouTubeStatus
 } from "../controllers/user.controllers.js";
 
 import {
@@ -83,6 +93,8 @@ router.get("/me", verifyJWT, getCurrentUser);
 router.put("/update-account", verifyJWT, updateAccountDetails);
 router.put("/update-avatar", verifyJWT, upload.single("avatar"), updateUserAvatar);
 router.put("/update-cover", verifyJWT, upload.single("coverImage"), updateUserCoverImage);
+router.delete("/avatar-delete", verifyJWT, deleteAvatar);
+router.delete("/cover-delete", verifyJWT, deleteCoverImage);
 
 /* -------------------- Channel & Watch History Routes -------------------- */
 
@@ -106,6 +118,17 @@ router.get("/watch-later", verifyJWT, getWatchLater);
 router.post("/watch-later/:videoId", verifyJWT, addToWatchLater);
 router.delete("/watch-later/:videoId", verifyJWT, removeFromWatchLater);
 router.get("/liked-video", verifyJWT, getLikedVideos);
+
+router.post("/setup-2fa", verifyJWT, setup2FA);
+router.post("/verify-2fa", verifyJWT, verify2FACode);
+router.post("/disable-2fa", verifyJWT, disable2FA);
+
+router.delete("/delete", verifyJWT, deleteAccount);
+
+router.get("/auth-url",verifyJWT, getAuthUrl);
+router.get("/connect-youtube",verifyJWT, handleCallback);
+router.get("/disconnect-youtube", verifyJWT, disconnectYouTube);
+router.get("/check-youtube-status", verifyJWT, checkYouTubeStatus);
 
 
 export default router;

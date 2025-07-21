@@ -8,9 +8,13 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import zxcvbn from 'zxcvbn';
 import crypto from 'crypto';
+import speakeasy from 'speakeasy';
+import QRCode from 'QRCode';
+import { Video } from '../models/video.model.js';
 import {v2 as cloudinary} from 'cloudinary';
-import Channel from '../models/channel.model.js';
-
+import {Like } from '../models/like.model.js';
+import { Comment } from '../models/comment.model.js';
+import { google } from 'googleapis';
 
 
 // Token generator
@@ -536,8 +540,7 @@ const verifyOtp = async (req, res) => {
   }
 };
 
-
- const updateUserAvatar = asyncHandler(async (req, res) => {
+const updateUserAvatar = asyncHandler(async (req, res) => {
   const avatarLocalPath = req.file?.path;
 
   if (!avatarLocalPath) {
@@ -574,23 +577,23 @@ const verifyOtp = async (req, res) => {
   await user.save();
 
   // 🧼 Step 4: Cleanup temp local file (safely)
-  try {
-    await fs.access(avatarLocalPath); // Check if file exists
-    await fs.unlinkAsync(avatarLocalPath); // Delete it
-  } catch (err) {
-    if (err.code !== "ENOENT") {
-      return res.status(400).json({ success: false, message: "Error while deleting local file" });
-    }
-  }
+  // try {
+  //   await fs.access(avatarLocalPath); // Check if file exists
+  //   await fs.unlinkAsync(avatarLocalPath); // Delete it
+  // } catch (err) {
+  //   if (err.code !== "ENOENT") {
+  //     return res.status(400).json({ success: false, message: "Error while deleting local file" });
+  //   }
+  // }
   
 
-  return res.status(200).json(
-    new ApiResponse(200, user, "Avatar image updated successfully")
-  );
+ return res.status(200).json(
+  new ApiResponse(200, { avatar: user.avatar }, "Avatar updated successfully")
+);
+
 });
 
 
-  
 const updateUserCoverImage = asyncHandler(async (req, res) => {
   try {
     const coverImageLocalPath = req.file?.path;
@@ -631,6 +634,67 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
       .status(500)
       .json(new ApiResponse(500, null, "Internal server error"));
   }
+});
+
+// delete avatr
+const deleteAvatar = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user?._id);
+  if (!user) {
+    throw new ApiError(404, "The user with the provided details could not be found. Please check the information and try again.");
+  }
+
+  // 🔥 Step 1: Delete old avatar from Cloudinary (if exists)
+  if (user.avatar) {
+    try {
+      const segments = user.avatar.split("/");
+      const fileName = segments[segments.length - 1];
+      const publicId = `avatars/${fileName.split(".")[0]}`;
+
+      await cloudinary.uploader.destroy(publicId);
+    } catch (err) {
+      return res.status(400).json({ success: false, message: "Error while deleting old avatar" });
+    }
+  }
+
+  // ✅ Step 2: Save new avatar URL in DB
+  user.avatar = null;
+  await user.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, user, "Avatar image deleted successfully")
+  );
+});
+
+  
+
+
+//delete cover image
+const deleteCoverImage = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user?._id);
+  if (!user) {
+    throw new ApiError(404, "The user with the provided details could not be found. Please check the information and try again.");
+  }
+
+  // 🔥 Step 1: Delete old avatar from Cloudinary (if exists)
+  if (user.coverImage) {
+    try {
+      const segments = user.coverImage.split("/");
+      const fileName = segments[segments.length - 1];
+      const publicId = `covers/${fileName.split(".")[0]}`;
+
+      await cloudinary.uploader.destroy(publicId);
+    } catch (err) {
+      return res.status(400).json({ success: false, message: "Error while deleting old avatar" });
+    }
+  }
+
+  // ✅ Step 2: Save new avatar URL in DB
+  user.coverImage = null;
+  await user.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, user, "Cover image deleted successfully")
+  );
 });
 
 
@@ -995,18 +1059,6 @@ const getUserChannelById = asyncHandler(async (req, res) => {
   });
 });
 
-
-
-
-
-
-
-
-
-
-
-
-
 const getPlaylistById = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
 
@@ -1021,7 +1073,6 @@ const getPlaylistById = asyncHandler(async (req, res) => {
 
   res.status(200).json(new ApiResponse(200, playlist, "Playlist fetched successfully"));
 });
-
 
 const changecurrentPassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
@@ -1074,9 +1125,6 @@ const changecurrentPassword = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, null, "Password changed successfully"));
 });
-
-
-
 
 
 const loginUser = asyncHandler(async (req, res) => {
@@ -1367,11 +1415,237 @@ export const getLikedVideos = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, { videos: user.likedVideos }, "Liked videos fetched"));
 });
 
+// 
+// controllers/authController.js
 
 
+// Setup 2FA - generate secret and QR code
+export const setup2FA = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const secret = speakeasy.generateSecret({
+      name: `YourApp:${user.email}`,
+      length: 20,
+    });
+
+    const qrCode = await QRCode.toDataURL(secret.otpauth_url);
+
+    // Save temp secret for verification later
+    user.temp2FASecret = secret.base32;
+    await user.save();
+
+    return res.json({
+      secret: secret.base32,
+      qrCode,
+    });
+  } catch (error) {
+    console.error('Error setting up 2FA:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Verify 2FA code
+export const verify2FACode = async (req, res) => {
+  try {
+    const { code, secret } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const verified = speakeasy.totp.verify({
+      secret,
+      encoding: 'base32',
+      token: code,
+      window: 1,
+    });
+
+    if (!verified) {
+      return res.status(400).json({ message: 'Invalid verification code' });
+    }
+
+    user.twoFactorSecret = secret;
+    user.settings.twoFactorEnabled = true;
+    user.temp2FASecret = undefined;
+    await user.save();
+
+    return res.json({ message: 'Two-factor authentication enabled successfully' });
+  } catch (error) {
+    console.error('Error verifying 2FA:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Disable 2FA
+export const disable2FA = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.twoFactorSecret = undefined;
+    user.settings.twoFactorEnabled = false;
+    await user.save();
+
+    return res.json({ message: 'Two-factor authentication disabled' });
+  } catch (error) {
+    console.error('Error disabling 2FA:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// delete account
+export const deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await User.findByIdAndDelete(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // 🧹 Clean up associated data
+    await Promise.all([
+      Video.deleteMany({ owner: userId }),
+      Comment.deleteMany({ author: userId }),
+      Like.deleteMany({ user: userId }),
+      // Add any additional related deletions here
+    ]);
+
+    res.json({ message: 'Account and associated data deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const oauth2Client = new google.auth.OAuth2(
+  process.env.YOUTUBE_CLIENT_ID,
+  process.env.YOUTUBE_CLIENT_SECRET,
+  process.env.YOUTUBE_REDIRECT_URI
+);
+
+const scopes = [
+  'https://www.googleapis.com/auth/youtube',
+  'https://www.googleapis.com/auth/youtube.upload',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email'
+];
+
+export const getAuthUrl = async (req, res) => {
+  try {
+    const state = crypto.randomBytes(32).toString('hex');
+
+    await User.findByIdAndUpdate(req.user.id, {
+      'youtube.authState': state
+    });
+
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: scopes,
+      state,
+      prompt: 'consent'
+    });
+
+    res.json({ authUrl: url });
+  } catch (error) {
+    console.error('Error generating YouTube auth URL:', error);
+    res.status(500).json({ message: 'Failed to generate YouTube auth URL' });
+  }
+};
+
+export const handleCallback = async (req, res) => {
+  try {
+    const { code, state } = req.query;
+
+    const user = await User.findById(req.user.id);
+    if (!user || user.youtube?.authState !== state) {
+      return res.status(400).json({ message: 'Invalid state parameter' });
+    }
+
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+
+    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    const channelResponse = await youtube.channels.list({
+      part: 'snippet',
+      mine: true
+    });
+
+    const channel = channelResponse.data.items[0];
+    const channelInfo = {
+      id: channel.id,
+      title: channel.snippet.title,
+      thumbnail: channel.snippet.thumbnails.default.url
+    };
+
+    user.youtube = {
+      connected: true,
+      channel: channelInfo,
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiryDate: tokens.expiry_date,
+      authState: undefined
+    };
+
+    await user.save();
+
+    res.send('<script>window.close();</script>');
+  } catch (error) {
+    console.error('Error handling YouTube callback:', error);
+    res.status(500).json({ message: 'Failed to connect YouTube account' });
+  }
+};
+
+export const disconnectYouTube = async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        $set: {
+          'youtube.connected': false,
+          'youtube.channel': null,
+          'youtube.accessToken': null,
+          'youtube.refreshToken': null,
+          'youtube.expiryDate': null,
+          'youtube.autoUpload': false
+        }
+      },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({ message: 'YouTube account disconnected successfully' });
+  } catch (error) {
+    console.error('Error disconnecting YouTube:', error);
+    res.status(500).json({ message: 'Failed to disconnect YouTube account' });
+  }
+};
+
+export const checkYouTubeStatus = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      connected: user.youtube?.connected || false,
+      channel: user.youtube?.channel || null
+    });
+  } catch (error) {
+    console.error('Error checking YouTube status:', error);
+    res.status(500).json({ message: 'Failed to check YouTube status' });
+  }
+};
 
 
   export {
+
     registerUser,
     loginUser,
     socialLogin,
@@ -1384,6 +1658,8 @@ export const getLikedVideos = asyncHandler(async (req, res) => {
     verifyOtp,
     updateUserAvatar,
     updateUserCoverImage,
+    deleteAvatar,
+    deleteCoverImage,
     getPlaylistById,
     getUserChannel,
     getUserChannelById,

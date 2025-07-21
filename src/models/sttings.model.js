@@ -1,67 +1,26 @@
-import mongoose from 'mongoose';
+// settings.model.js
+import mongoose from "mongoose";
 
 const settingsSchema = new mongoose.Schema({
-  account: {
-    name: { type: String },
-    email: { type: String }
-  },
-  advancedSettings: {
-    autoPlay: { type: Boolean, default: true }
-  },
-  billing: {
-    plan: { type: String, default: 'free' },
-    paymentMethod: { type: String }
-  },
-  connectedApps: {
-    google: { type: Boolean, default: false },
-    facebook: { type: Boolean, default: false }
-  },
-  downloads: {
-    wifiOnly: { type: Boolean, default: true }
-  },
-  notification: {
-    email: { type: Boolean, default: true },
-    sms: { type: Boolean, default: false }
-  },
-  placeholder: {
-    enabled: { type: Boolean, default: false }
-  },
-  playback: {
-    quality: { type: String, default: 'auto' },
-    subtitles: { type: Boolean, default: true }
-  },
-  security: {
-    twoFactorAuth: { type: Boolean, default: false },
-    passwordChangeRequired: { type: Boolean, default: false }
-  },
-  appearance: {
-    theme: { type: String, default: 'light' },
-    fontSize: { type: String, default: 'medium' }
-  },
-  language: {
-    preferredLanguage: { type: String, default: 'en' }
-  },
-  blocklist: {
-    blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    blockedChannels: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Channel' }]
-  },
-  history: {
-    watchedVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Video' }],
-    watchedTweets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tweet' }]
-  },
-  apps: [{ type: String }],
-  experimental: { type: Boolean, default: false },
-  privacy: {
-    showProfilePicture: { type: Boolean, default: true },
-    allowMessages: { type: Boolean, default: true }
-  }
-}, { _id: false });
+  theme: { type: String, default: "system" },
+  notifications: { type: Boolean, default: true },
+  emailNotifications: { type: Boolean, default: true },
+  pushNotifications: { type: Boolean, default: true },
+  language: { type: String, default: "en" },
+  timezone: { type: String, default: "Asia/Kolkata" },
 
-const userSchema = new mongoose.Schema({
-  name: { type: String },
-  email: { type: String, unique: true },
-  password: { type: String },
-  settings: settingsSchema,
-}, { timestamps: true });
+  twoFactorEnabled: { type: Boolean, default: false },
+  backupEmail: { type: String, default: "" },
 
-export const User = mongoose.model('User', userSchema);
+  dataExport: { type: Boolean, default: false },
+  autoPlayVideos: { type: Boolean, default: true },
+  videoQuality: { type: String, default: "auto" },
+  downloadQuality: { type: String, default: "hd" },
+
+  darkModeSchedule: { type: String, default: "system" },
+  darkModeStart: { type: String, default: "20:00" },
+  darkModeEnd: { type: String, default: "07:00" }
+});
+
+// ⚠️ DO NOT export as mongoose.model() — just export the schema!
+export default settingsSchema;

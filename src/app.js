@@ -78,7 +78,7 @@ app.use("/api/v1/user", likeRouter);//like video
 app.use("/api/v1/user/playlist", playlistRouter);
 app.use("/api/v1/users/dashboard", dashboardRouter);
 app.use("/api/v1/users/analytics", analyticsRouter);
-app.use("/api/v1/settings", settingRouter);
+app.use("/api/v1/users", settingRouter);
 app.use("/api/v1/users/comments", commentRouter);
 app.use("/api/v1/users/sendemail", emailRouter);
 app.use("/api/v1/admin", authrouter);
