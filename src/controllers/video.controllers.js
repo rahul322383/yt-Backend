@@ -204,268 +204,6 @@ export const getAllVideos = asyncHandler(async (req, res) => {
 });
 
 
-// export const getVideoById = asyncHandler(async (req, res) => {
-//   const { videoId } = req.params;
-
-//   if (!isValidObjectId(videoId)) {
-//     return res.status(400).json(new ApiResponse(400, {}, "Invalid video ID format"));
-//   }
-
-//   const video = await Video.findById(videoId).lean();
-//   if (!video) {
-//     return res.status(404).json(new ApiResponse(404, {}, "Video not found"));
-//   }
-
-//   const playlist = await Playlist.findOne({ "videos.videoId": videoId });
-//   if (!playlist) {
-//     return res.status(404).json(new ApiResponse(404, {}, "Video not found in any playlist"));
-//   }
-
-//   const embeddedVideo = playlist.videos.find(v => String(v.videoId) === videoId);
-//   if (!embeddedVideo) {
-//     return res.status(404).json(new ApiResponse(404, {}, "Video not found inside the playlist"));
-//   }
-
-//   // Increment views
-//   embeddedVideo.views = (embeddedVideo.views || 0) + 1;
-//   await playlist.save();
-
-//   // Get channel info
-//   const channel = await User.findOne({ channelId: video.channelId })
-//     .select("channelId fullName avatar")
-//     .lean();
-
-//   // Get like/dislike/comment counts
-//   const [likesCount, dislikesCount, comments] = await Promise.all([
-//     Like.countDocuments({ video: videoId, liked: true }),
-//     Like.countDocuments({ video: videoId, liked: false }),
-//     Comment.countDocuments({ video: videoId }),
-//   ]);
-
-//   // Main video data response
-//   const videoData = {
-//     _id: video._id,
-//     title: embeddedVideo.title || video.title,
-//     thumbnail: embeddedVideo.thumbnail || video.thumbnail,
-//     videoUrl: embeddedVideo.videoUrl || video.videoUrl,
-//     description: embeddedVideo.description || video.description || "",
-//     duration: embeddedVideo.duration || video.duration,
-//     views: embeddedVideo.views || video.views || 0,
-//     likeCount: likesCount,
-//     dislikeCount: dislikesCount,
-//     commentCount: comments,
-//     tags: embeddedVideo.tags || video.tags || [],
-//     playlistId: playlist._id,
-//     playlistName: playlist.name,
-//     channelId: video.channelId,
-//     creatorName: channel?.fullName || "Unknown Creator",
-//     avatarUrl: channel?.avatar || null,
-//     createdAt: video.createdAt,
-//     updatedAt: video.updatedAt,
-//     isPublished: video.isPublished,
-//   };
-
-//   // Get all playlist videos
-//   const playlistVideoIds = playlist.videos.map(v => v.videoId);
-
-//   const [playlistVideos, playlistLikeAgg] = await Promise.all([
-//     Video.find({ _id: { $in: playlistVideoIds } }).lean(),
-//     Like.aggregate([
-//       { $match: { video: { $in: playlistVideoIds } } },
-//       {
-//         $group: {
-//           _id: { video: "$video", liked: "$liked" },
-//           count: { $sum: 1 },
-//         },
-//       },
-//     ]),
-//   ]);
-
-//   // Format likes into like/dislike map
-//   const likesMap = {};
-//   for (const item of playlistLikeAgg) {
-//     const videoIdStr = String(item._id.video);
-//     if (!likesMap[videoIdStr]) {
-//       likesMap[videoIdStr] = { likeCount: 0, dislikeCount: 0 };
-//     }
-
-//     if (item._id.liked === true) {
-//       likesMap[videoIdStr].likeCount = item.count;
-//     } else {
-//       likesMap[videoIdStr].dislikeCount = item.count;
-//     }
-//   }
-
-//   // Get channels for all playlist videos
-//   const uniqueChannelIds = [...new Set(playlistVideos.map(v => v.channelId).filter(Boolean))];
-//   const channels = await User.find({ channelId: { $in: uniqueChannelIds } })
-//     .select("channelId fullName avatar")
-//     .lean();
-
-//   const channelMap = channels.reduce((acc, ch) => {
-//     acc[ch.channelId] = ch;
-//     return acc;
-//   }, {});
-
-//   const formattedPlaylistVideos = playlistVideos.map(v => {
-//     const channelInfo = channelMap[v.channelId];
-//     const likeInfo = likesMap[String(v._id)] || { likeCount: 0, dislikeCount: 0 };
-
-//     return {
-//       _id: v._id,
-//       title: v.title,
-//       thumbnail: v.thumbnail,
-//       videoUrl: v.videoUrl,
-//       duration: v.duration,
-//       views: v.views || 0,
-//       likeCount: likeInfo.likeCount,
-//       dislikeCount: likeInfo.dislikeCount,
-//       commentCount: v.commentCount || 0,
-//       channelId: v.channelId,
-//       creatorName: channelInfo?.fullName || "Unknown Creator",
-//       avatarUrl: channelInfo?.avatar || null,
-//       isPublished: v.isPublished,
-//       createdAt: v.createdAt,
-//     };
-//   });
-
-//   return res.status(200).json(
-//     new ApiResponse(
-//       200,
-//       {
-//         video: videoData,
-//         playlistVideos: formattedPlaylistVideos,
-//       },
-//       "Video details fetched successfully"
-//     )
-//   );
-// });
-
-
-
-
-// export const getVideoById = asyncHandler(async (req, res) => {
-//   const { videoId } = req.params;
-
-//   if (!isValidObjectId(videoId)) {
-//     return res.status(400).json(new ApiResponse(400, {}, "Invalid video ID format"));
-//   }
-
-//   const playlist = await Playlist.findOne({ "videos.videoId": videoId });
-//   if (!playlist) {
-//     return res.status(404).json(new ApiResponse(404, {}, "Video not found in any playlist"));
-//   }
-
-//   const embeddedVideo = playlist.videos.find(v => String(v.videoId) === videoId);
-//   if (!embeddedVideo) {
-//     return res.status(404).json(new ApiResponse(404, {}, "Video not found inside the playlist"));
-//   }
-
-//   embeddedVideo.views = (embeddedVideo.views || 0) + 1;
-//   await playlist.save();
-
-//   const fullVideo = await Video.findById(videoId).lean();
-//   if (!fullVideo) {
-//     return res.status(404).json(new ApiResponse(404, {}, "Video details not found"));
-//   }
-
-//   const channel = await User.findOne({ channelId: fullVideo.channelId }).lean();
-
-//   const [likes, comments] = await Promise.all([
-//     Like.find({ video: videoId }),
-//     Comment.find({ video: videoId }).populate("owner", "username avatar"),
-//   ]);
-
-//   const likeCount = likes.filter(l => l.liked === true).length;
-//   const dislikeCount = likes.filter(l => l.liked === false).length;
-
-//   const videoData = {
-//     videoId: embeddedVideo.videoId,
-//     thumbnail: embeddedVideo.thumbnail || fullVideo.thumbnail,
-//     owner: fullVideo.owner,
-//     ownerName: fullVideo.ownerName || "Unknown Owner",
-//     title: embeddedVideo?.title,
-//     tags: embeddedVideo?.tags || [],
-//     duration: embeddedVideo?.duration || fullVideo.duration,
-//     description: embeddedVideo?.description || "",
-//     videoUrl: embeddedVideo?.videoUrl || "",
-//     views: embeddedVideo?.views,
-//     likeCount,
-//     dislikeCount,
-//     commentCount: comments.length || 0,
-//     playlistId: playlist._id,
-//     playlistName: playlist.name,
-//     subscribed: req.user?.channelId === channel?.channelId,
-//     channelId: channel?.channelId || null,
-//     channelName: channel?.fullName || "Unknown Channel",
-//     avatarUrl: channel?.avatar || null,
-//     createdAt: fullVideo.createdAt,
-//     updatedAt: fullVideo.updatedAt,
-//   };
-
-//   // === Playlist Side Videos ===
-//   const playlistVideoIds = playlist.videos.map(v => v.videoId);
-//   const fullPlaylistVideos = await Video.find({ _id: { $in: playlistVideoIds } }).lean();
-
-//   const likesAggregation = await Like.aggregate([
-//     { $match: { video: { $in: playlistVideoIds } } },
-//     {
-//       $group: {
-//         _id: { video: "$video", liked: "$liked" },
-//         count: { $sum: 1 }
-//       }
-//     }
-//   ]);
-
-//   const likesMap = {};
-//   likesAggregation.forEach(item => {
-//     const key = item._id.video.toString();
-//     const isLiked = item._id.liked;
-//     if (!likesMap[key]) likesMap[key] = { likes: 0, dislikes: 0 };
-//     if (isLiked) likesMap[key].likes = item.count;
-//     else likesMap[key].dislikes = item.count;
-//   });
-
-//   const uniqueChannelIds = [...new Set(fullPlaylistVideos.map(v => v.channelId).filter(Boolean))];
-//   const channels = await User.find({ channelId: { $in: uniqueChannelIds } })
-//     .select("channelId fullName avatar")
-//     .lean();
-
-//   const channelMap = {};
-//   channels.forEach(ch => {
-//     channelMap[ch.channelId] = ch;
-//   });
-
-//   const playlistVideos = fullPlaylistVideos.map(video => {
-//     const ch = channelMap[video.channelId];
-//     const likesData = likesMap[video._id.toString()] || { likes: 0, dislikes: 0 };
-
-//     return {
-//       videoId: video._id,
-//       owner: video.owner,
-//       ownerName: video.ownerName || "Unknown Owner",
-//       tags: video.tags,
-//       duration: video.duration,
-//       description: video.description || "",
-//       title: video.title,
-//       thumbnail: video.thumbnail,
-//       videoUrl: video.videoUrl,
-//       views: video.views || 0,
-//       likeCount: likesData.likes,
-//       dislikeCount: likesData.dislikes,
-//       commentCount: video.commentsCount || 0,
-//       channelId: video.channelId,
-//       channelName: ch?.fullName || "Unknown Channel",
-//       avatarUrl: ch?.avatar || null,
-//       isPublished: video.isPublished,
-//       uploadedAt: video.createdAt,
-//     };
-//   });
-
-//   return res.status(200).json(
-//     new ApiResponse(200, { videoData, playlistVideos }, "Video details and playlist fetched successfully")
-//   );
-// });
 
 
 
@@ -749,8 +487,6 @@ export const deleteVideo = asyncHandler(async (req, res) => {
 
 
 
-
-
 export const getAndTrackVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   const userId = req.user?._id;
@@ -763,8 +499,9 @@ export const getAndTrackVideo = asyncHandler(async (req, res) => {
 
   const session = await mongoose.startSession();
   session.startTransaction();
-
+  
   try {
+    // ✅ Step 1: Find and update video views
     const video = await Video.findByIdAndUpdate(
       videoId,
       { $inc: { views: 1 } },
@@ -775,8 +512,8 @@ export const getAndTrackVideo = asyncHandler(async (req, res) => {
       }
     )
       .populate("owner", "username avatar channelId")
-      .lean();
-
+      .exec();
+    
     if (!video) {
       await session.abortTransaction();
       return res
@@ -787,31 +524,40 @@ export const getAndTrackVideo = asyncHandler(async (req, res) => {
     let isSubscribed = false;
     let isInWatchLater = false;
 
-    // Add to user's watch history if logged in
+    // ✅ Step 2: Track watch history if logged in
     if (userId && mongoose.Types.ObjectId.isValid(userId)) {
-      const user = await User.findByIdAndUpdate(
-        userId,
-        {
-          $addToSet: { watchHistory: video._id },
-          $set: { lastWatchedAt: new Date() },
-        },
-        { new: true, session }
-      ).lean();
+      const user = await User.findById(userId).session(session);
 
       if (user) {
+        // Avoid duplicates
+        const alreadyWatched = user.watchHistory.some(
+          (id) => id.toString() === video._id.toString()
+        );
+
+        if (!alreadyWatched) {
+          user.watchHistory.push(video._id);
+        }
+
+        user.lastWatchedAt = new Date();
+        await user.save({ session });
+     
+
         isSubscribed = user.subscribedChannels?.includes(
           video.owner?.channelId
         );
+
         isInWatchLater = user.watchLater?.includes(videoId);
       }
     }
 
+    // ✅ Step 3: Get like/dislike/comment count
     const [likeCount, dislikeCount, commentCount] = await Promise.all([
       Like.countDocuments({ video: videoId, action: "like" }),
       Like.countDocuments({ video: videoId, action: "dislike" }),
       Comment.countDocuments({ video: videoId }),
     ]);
 
+    // ✅ Step 4: Build response
     const responseData = {
       _id: video._id,
       title: video.title,
@@ -820,7 +566,7 @@ export const getAndTrackVideo = asyncHandler(async (req, res) => {
       thumbnail: video.thumbnail,
       duration: video.duration,
       tags: video.tags,
-      views: video.views + 1,
+      views: video.views, // already incremented
       createdAt: video.createdAt,
       updatedAt: video.updatedAt,
       channelId: video.channelId,
@@ -842,7 +588,7 @@ export const getAndTrackVideo = asyncHandler(async (req, res) => {
       .json(new ApiResponse(200, responseData, "Video fetched successfully"));
   } catch (error) {
     await session.abortTransaction();
-    console.error("Error in getAndTrackVideo:", error);
+    console.error("❌ Error in getAndTrackVideo:", error);
     return res
       .status(500)
       .json(new ApiResponse(500, null, "Failed to fetch video details"));
@@ -854,61 +600,8 @@ export const getAndTrackVideo = asyncHandler(async (req, res) => {
 
 
 
-// export const likeVideos = async (req, res) => {
-//   const { videoId } = req.params;
-//   const { userId } = req.body;
 
-//   if (!videoId || !userId) {
-//     return res.status(400).json({ msg: "Video ID and User ID are required" });
-//   }
 
-//   try {
-//     const video = await Video.findById(videoId).populate({
-//       path: "user",
-//       select: "_id username", // only fetch what's needed
-//     });
-
-//     if (!video) {
-//       return res.status(404).json({ msg: "Video not found" });
-//     }
-   
-
-//     const alreadyLiked = video.likes.includes(userId);
-
-//     if (alreadyLiked) {
-//       // Remove like
-//       video.likes = video.likes.filter(id => id.toString() !== userId);
-//     } else {
-//       // Add like
-//       video.likes.push(userId);
-
-//       // Safe check before sending notification
-//       if (video.user && video.user._id) {
-//         try {
-//           sendNotification(
-//             req.app,
-//             video.user._id.toString(),
-//             `Your video "${video.title}" got a new like ❤️`
-//           );
-//         } catch (notifyErr) {
-//           console.error("Notification error:", notifyErr);
-//         }
-//       } else {
-//         console.warn("No video.user found. Skipping notification.");
-//       }
-//     }
-
-//     await video.save();
-
-//     return res.status(200).json({
-//       msg: alreadyLiked ? "Like removed" : "Liked and notification sent",
-//       likesCount: video.likes.length,
-//     });
-//   } catch (err) {
-//     console.error("Error liking video:", err);
-//     return res.status(500).json({ msg: "Internal error" });
-//   }
-// };
 
 
 export const likeVideos = async (req, res) => {

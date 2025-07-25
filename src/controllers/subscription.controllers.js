@@ -163,11 +163,51 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
   });
 });
 
+const toggleNotification = asyncHandler(async (req, res) => {
+  const { channelId } = req.params;
+
+  if (!channelId) {
+    return res.status(400).json(new ApiResponse(400, null, "Channel ID is required"));
+  }
+
+  const channelUser = await User.findOne({ channelId }).select("_id");
+  if (!channelUser) {
+    return res.status(404).json(new ApiResponse(404, null, "Channel not found"));
+  }
+
+  const subscriberId = req.user?._id;
+  if (!subscriberId) {
+    return res.status(401).json(new ApiResponse(401, null, "Login required"));
+  }
+
+  const subscription = await Subscription.findOne({
+    subscriber: subscriberId,
+    channel: channelUser._id,
+  });
+
+  if (!subscription) {
+    return res.status(404).json(new ApiResponse(404, null, "Subscription not found"));
+  }
+
+  subscription.notifications = !subscription.notifications;
+  await subscription.save();
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { notify: subscription.notifications },
+      subscription.notifications
+        ? "🔔 Notifications turned ON"
+        : "🔕 Notifications turned OFF"
+    )
+  );
+});
 
 
 
 
 export {
+  toggleNotification,
   toggleSubscription,
   getUserChannelSubscribers,
   getSubscribedChannels,

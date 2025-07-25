@@ -4,20 +4,39 @@ import { User } from "../models/user.model.js";
 export const optionalJWT = async (req, res, next) => {
   try {
     const token = req.headers["authorization"]?.replace("Bearer ", "");
+  
+    
 
-    // If there's no token, just continue without attaching user
-    if (!token) return next();
-
-    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-
-    const user = await User.findById(decoded._id).select("-password");
-
-    if (user) {
-      req.user = user;
+    if (!token) {
+      req.user = null; // No user, but still allow access
+      return next();
     }
-  } catch (err) {
-    // Invalid or expired token – silent fail
-  }
 
-  return next(); // Always continue
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    } catch (error) {
+      console.log("optionalJWT error:", error.message);
+      req.user = null; // Token invalid/expired, continue as guest
+      return next();
+    }
+
+    if (!decoded?._id) {
+      req.user = null;
+      return next();
+    }
+
+    const user = await User.findById(decoded._id).select("-password -refreshToken");
+    if (!user) {
+      req.user = null;
+      return next();
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    console.log("optionalJWT unexpected error:", error.message);
+    req.user = null;
+    next(); // Still allow the route to run as guest
+  }
 };

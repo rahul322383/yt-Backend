@@ -15,6 +15,11 @@ const subscriptionSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  notifications: {
+  type: Boolean,
+  default: false,
+}
+
 }, {
   timestamps: true,
 });

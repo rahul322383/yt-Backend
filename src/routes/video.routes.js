@@ -13,13 +13,14 @@ import {
 
 
 import { verifyJWT } from "../middleware/auth.middleware.js";
+import { optionalJWT } from "../middleware/optionaljwt.js";
 
 
 const router = express.Router();
 
 // 🔓 PUBLIC ROUTES FIRST
-router.get("/videos/:videoId", getVideoById);              // Public
-router.get("/videos/:videoId/watch", getAndTrackVideo);    // Public
+router.get("/videos/:videoId",optionalJWT,getVideoById);              // Public
+// router.get("/videos/watch/:videoId", optionalJWT,getAndTrackVideo);    // Public
 router.get("/play/:videoId", playVideoById);
 
 

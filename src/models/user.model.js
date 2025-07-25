@@ -509,8 +509,11 @@ const userSchema = new Schema(
     },
 
     // Watch history & preferences
-    watchHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
-    lastWatchedAt: Date,
+    watchHistory: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Video"
+    }],
+
     watchLater: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
     likedVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
     dislikedVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],

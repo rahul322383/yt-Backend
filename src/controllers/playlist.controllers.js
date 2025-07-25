@@ -8,6 +8,9 @@ import crypto from "crypto";
 import { upload } from "../middleware/multer.middleware.js";
 import { Video } from "../models/video.model.js";
 import { channel } from "diagnostics_channel";
+import {Like} from '../models/like.model.js'
+import {Comment} from '../models/comment.model.js'
+
 
 
 
@@ -417,17 +420,18 @@ export const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
   );
 });
 
-// Delete Playlist
-export const deletePlaylist = asyncHandler(async (req, res) => {
+
+export  const deletePlaylist = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(playlistId)) {
     return res.status(400).json({
       success: false,
       message: "Invalid playlist ID",
-    })
+    });
   }
 
+  // 1. Find the playlist and delete it
   const playlist = await Playlist.findOneAndDelete({
     _id: playlistId,
     owner: req.user._id,
@@ -436,15 +440,29 @@ export const deletePlaylist = asyncHandler(async (req, res) => {
   if (!playlist) {
     return res.status(404).json({
       success: false,
-      message: "Playlist not found or you are not authorized to access it",
+      message: "Playlist not found or unauthorized",
     });
   }
-  
 
-  return res
-    .status(200)
-    .json(new ApiResponse(200, playlist, "Playlist deleted successfully"));
+  // 2. Get all videoIds from the deleted playlist
+  const videoIds = playlist.videos.map((v) => v.videoId);
+
+  if (videoIds.length > 0) {
+    // 3. Delete related videos
+    await Video.deleteMany({ _id: { $in: videoIds } });
+
+    // 4. Delete related likes/dislikes
+    await Like.deleteMany({ targetId: { $in: videoIds } });
+
+    // 5. Delete related comments
+    await Comment.deleteMany({ video: { $in: videoIds } });
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, null, "Playlist and all associated data deleted successfully")
+  );
 });
+
 
 // Get All Playlists by User
 export const getPlaylistsByUser = asyncHandler(async (req, res) => {
