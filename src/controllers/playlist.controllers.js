@@ -477,7 +477,6 @@ export const getPlaylistsByUser = asyncHandler(async (req, res) => {
 export const getPlaylistById = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
 
-  // 🧠 Check if ID is valid
   if (!mongoose.Types.ObjectId.isValid(playlistId)) {
     return res.status(400).json({
       success: false,
@@ -485,23 +484,50 @@ export const getPlaylistById = asyncHandler(async (req, res) => {
     });
   }
 
-  // 🎯 Fetch playlist with videos populated
-  const playlist = await Playlist.findById(playlistId).populate("videos.videoId");
+  const playlist = await Playlist.findById(playlistId)
+    .populate({
+      path: "videos",
+      populate: [
+        { path: "owner", select: "_id username avatar" }, // User info
+        { path: "playlistId", select: "_id name" },       // Playlist(s)
+      ],
+    });
 
-  // ❌ Not found
   if (!playlist) {
     return res.status(404).json({
       success: false,
       message: "Playlist not found",
-      data: null,
     });
   }
 
-  // ✅ Found it
+  // 👇 Enhance each video with likes, dislikes, views, commentsCount
+  const enhancedVideos = await Promise.all(
+    playlist.videos.map(async (video) => {
+      const [likeCount, dislikeCount, commentsCount] = await Promise.all([
+        Like.countDocuments({ targetId: video._id, action: "like" }),
+        Like.countDocuments({ targetId: video._id, action: "dislike" }),
+        Comment.countDocuments({ video: video._id }),
+      ]);
+
+      return {
+        ...video._doc,
+        likeCount,
+        dislikeCount,
+        commentsCount,
+      };
+    })
+  );
+
+  const fullPlaylist = {
+    ...playlist._doc,
+    videos: enhancedVideos,
+  };
+
   return res.status(200).json(
-    new ApiResponse(200, playlist, "Playlist fetched successfully")
+    new ApiResponse(200, fullPlaylist, "Playlist with full video details fetched")
   );
 });
+
 
 
 

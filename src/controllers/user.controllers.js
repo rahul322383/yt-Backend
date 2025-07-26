@@ -20,7 +20,10 @@ import { google } from 'googleapis';
 // Token generator
 const generateAccessTokenAndRefreshToken = async (userId) => {
   const user = await User.findById(userId);
-  if (!user) throw new ApiError(404, "User not found");
+  if (!user) 
+  return res.status(404).json(
+    new ApiResponse(404, null, "User not found")
+  );
 
   if (typeof user.generateAccessToken !== "function" || typeof user.generateRefreshToken !== "function") {
     return res.status(500).json({
@@ -790,55 +793,44 @@ const getUserChannel = asyncHandler(async (req, res) => {
 
 const getUserChannelById = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
+  const currentUserId = req.user?._id?.toString();
 
   if (!channelId?.trim()) {
-    return res.status(400).json({ 
-      success: false, 
+    return res.status(400).json({
+      success: false,
       message: "Channel ID is required",
       statusCode: 400
     });
   }
 
-  const channel = await User.aggregate([
+  const channelData = await User.aggregate([
     {
       $match: {
         channelId: channelId.toLowerCase(),
-        status: { $ne: "deleted" } // Exclude deleted accounts
+        status: { $ne: "deleted" }
       }
     },
-    // Lookup subscribers
+    // 🔁 Subscriptions to this channel
     {
       $lookup: {
         from: "subscribes",
         localField: "_id",
         foreignField: "channel",
         as: "subscribers",
-        pipeline: [
-          {
-            $match: {
-              status: "active" // Only count active subscriptions
-            }
-          }
-        ]
+        pipeline: [{ $match: { status: "active" } }]
       }
     },
-    // Lookup subscriptions (channels this user is subscribed to)
+    // 🔁 Subscriptions this user has made
     {
       $lookup: {
         from: "subscribes",
         localField: "_id",
         foreignField: "subscriber",
         as: "subscriptions",
-        pipeline: [
-          {
-            $match: {
-              status: "active" // Only count active subscriptions
-            }
-          }
-        ]
+        pipeline: [{ $match: { status: "active" } }]
       }
     },
-    // Lookup videos with additional details
+    // 🔁 Videos by this user
     {
       $lookup: {
         from: "videos",
@@ -867,10 +859,7 @@ const getUserChannelById = asyncHandler(async (req, res) => {
             $addFields: {
               viewCount: { $size: "$views" },
               durationInSeconds: {
-                $divide: [
-                  { $subtract: ["$duration", 0] }, // Ensure duration is treated as number
-                  1000 // Convert milliseconds to seconds
-                ]
+                $divide: [{ $subtract: ["$duration", 0] }, 1000]
               }
             }
           },
@@ -891,12 +880,12 @@ const getUserChannelById = asyncHandler(async (req, res) => {
               updatedAt: 1
             }
           },
-          { $sort: { createdAt: -1 } } // Newest videos first
+          { $sort: { createdAt: -1 } }
         ],
         as: "videos"
       }
     },
-    // Lookup playlists with video details
+    // 🔁 Playlists
     {
       $lookup: {
         from: "playlists",
@@ -939,67 +928,28 @@ const getUserChannelById = asyncHandler(async (req, res) => {
           {
             $addFields: {
               videoCount: { $size: "$videoList" },
-              previewVideos: { $slice: ["$videoList", 4] } // Show first 4 videos as preview
+              previewVideos: { $slice: ["$videoList", 4] }
             }
           },
           {
             $project: {
-              videoList: 0 // Remove full video list to reduce payload
+              videoList: 0
             }
           },
-          { $sort: { updatedAt: -1 } } // Recently updated playlists first
+          { $sort: { updatedAt: -1 } }
         ],
         as: "playlists"
       }
     },
-    // Calculate aggregated fields
+    // 🧠 Aggregated counts
     {
       $addFields: {
         subscribersCount: { $size: "$subscribers" },
         subscriptionsCount: { $size: "$subscriptions" },
         videosCount: { $size: "$videos" },
-        totalViews: {
-          $sum: "$videos.viewCount"
-        },
-        channelIsSubscribedTo: {
-          $cond: {
-            if: {
-              $in: [
-                req.user?._id || null,
-                "$subscribers.subscriber"
-              ]
-            },
-            then: true,
-            else: false
-          }
-        },
-        notificationPref: {
-          $ifNull: [
-            {
-              $let: {
-                vars: {
-                  sub: {
-                    $arrayElemAt: [
-                      {
-                        $filter: {
-                          input: "$subscribers",
-                          as: "sub",
-                          cond: { $eq: ["$$sub.subscriber", req.user?._id || null] }
-                        }
-                      },
-                      0
-                    ]
-                  }
-                },
-                in: "$$sub.notificationPref"
-              }
-            },
-            "none"
-          ]
-        }
+        totalViews: { $sum: "$videos.viewCount" }
       }
     },
-    // Project only necessary fields
     {
       $project: {
         _id: 1,
@@ -1013,43 +963,61 @@ const getUserChannelById = asyncHandler(async (req, res) => {
         subscriptionsCount: 1,
         videosCount: 1,
         totalViews: 1,
-        channelIsSubscribedTo: 1,
-        notificationPref: 1,
         videos: 1,
         playlists: 1,
         createdAt: 1,
-        updatedAt: 1
+        updatedAt: 1,
+        subscribers: 1 // Needed for manual subscription check
       }
     }
   ]);
 
-  if (!channel?.length) {
-    return res.status(404).json({ 
-      success: false, 
+  if (!channelData?.length) {
+    return res.status(404).json({
+      success: false,
       message: "Channel not found",
       statusCode: 404
     });
   }
 
-  // Format the response data
-  const channelData = channel[0];
-  
-  // Calculate total duration of all videos in seconds
-  const totalDuration = channelData.videos.reduce(
+  const channel = channelData[0];
+
+  // ✅ Check if current user is subscribed
+  let channelIsSubscribedTo = false;
+  let notificationPref = "none";
+
+  if (currentUserId) {
+    const matchedSub = channel.subscribers.find(
+      (sub) => sub.subscriber?.toString() === currentUserId
+    );
+
+    if (matchedSub) {
+      channelIsSubscribedTo = true;
+      notificationPref = matchedSub.notificationPref || "none";
+    }
+  }
+
+  // ✅ Calculate total watch time
+  const totalWatchTime = channel.videos.reduce(
     (sum, video) => sum + (video.durationInSeconds || 0),
     0
   );
 
-  // Add additional calculated fields
+  // ✅ Format final response
   const responseData = {
-    ...channelData,
+    ...channel,
+    channelIsSubscribedTo,
+    notificationPref,
     stats: {
-      totalVideos: channelData.videosCount,
-      totalSubscribers: channelData.subscribersCount,
-      totalViews: channelData.totalViews || 0,
-      totalWatchTime: totalDuration // In seconds
+      totalVideos: channel.videosCount,
+      totalSubscribers: channel.subscribersCount,
+      totalViews: channel.totalViews || 0,
+      totalWatchTime
     }
   };
+
+  // ❌ Remove unnecessary data
+  delete responseData.subscribers;
 
   return res.status(200).json({
     success: true,
@@ -1058,6 +1026,8 @@ const getUserChannelById = asyncHandler(async (req, res) => {
     data: responseData
   });
 });
+
+
 
 const getPlaylistById = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
@@ -1490,6 +1460,7 @@ export const setup2FA = async (req, res) => {
 export const verify2FACode = async (req, res) => {
   try {
     const { code, secret } = req.body;
+    console.log("code:", code, "secret:", secret);
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -1499,6 +1470,7 @@ export const verify2FACode = async (req, res) => {
       token: code,
       window: 1,
     });
+    console.log("verified:", verified);
 
     if (!verified) {
       return res.status(400).json({ message: 'Invalid verification code' });
