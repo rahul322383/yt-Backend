@@ -1,14 +1,12 @@
 import express from "express";
 import {
-  getAllVideos,
-  publishAVideo,
   getVideoById,
   updateVideo,
   deleteVideo,
   togglePublishStatus,
   playVideoById,
   getAndTrackVideo,
-  likeVideos  // likeVideos is not used in this file, but it can be imported if needed
+  likeVideos 
 } from "../controllers/video.controllers.js";
 
 
@@ -19,8 +17,8 @@ import { optionalJWT } from "../middleware/optionaljwt.js";
 const router = express.Router();
 
 // 🔓 PUBLIC ROUTES FIRST
-router.get("/videos/:videoId",optionalJWT,getVideoById);              // Public
-// router.get("/videos/watch/:videoId", optionalJWT,getAndTrackVideo);    // Public
+router.get("/videos/:videoId",optionalJWT,getVideoById);             
+
 router.get("/play/:videoId", playVideoById);
 
 
@@ -30,14 +28,14 @@ router.get("/play/:videoId", playVideoById);
 
 router.use(verifyJWT);
 
-router.get("/", getAllVideos);
+// router.get("/", getAllVideos);
 
 // 🔹 Upload video
 // router.post("/:playlistId/videos", upload.fields([{ name: "video", maxCount: 1 }]), publishAVideo);
 
 router.post("/like/:videoId",verifyJWT,likeVideos);
 
-router.put("/videos/update/:videoId", updateVideo);
+router.put("/videos/:videoId", updateVideo);
 router.delete("/videos/:videoId", deleteVideo);
 router.patch("/publish/:videoId", togglePublishStatus);
 

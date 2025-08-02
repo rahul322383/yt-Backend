@@ -15,6 +15,7 @@ import {v2 as cloudinary} from 'cloudinary';
 import {Like } from '../models/like.model.js';
 import { Comment } from '../models/comment.model.js';
 import { google } from 'googleapis';
+import { Playlist } from '../models/playlist.model.js';
 
 
 // Token generator
@@ -171,6 +172,7 @@ const registerUser = asyncHandler(async (req, res) => {
       new ApiResponse(201, {
         user: createdUser,
         accessToken,
+        refreshToken,
       }, "User created successfully")
     );
   } catch (error) {
@@ -187,10 +189,6 @@ const registerUser = asyncHandler(async (req, res) => {
     );
   }
 });
-
-
-
-
 
 const socialLogin = async (req, res) => {
   const { token, provider } = req.body;
@@ -810,7 +808,6 @@ const getUserChannelById = asyncHandler(async (req, res) => {
         status: { $ne: "deleted" }
       }
     },
-    // 🔁 Subscriptions to this channel
     {
       $lookup: {
         from: "subscribes",
@@ -820,7 +817,6 @@ const getUserChannelById = asyncHandler(async (req, res) => {
         pipeline: [{ $match: { status: "active" } }]
       }
     },
-    // 🔁 Subscriptions this user has made
     {
       $lookup: {
         from: "subscribes",
@@ -830,7 +826,6 @@ const getUserChannelById = asyncHandler(async (req, res) => {
         pipeline: [{ $match: { status: "active" } }]
       }
     },
-    // 🔁 Videos by this user
     {
       $lookup: {
         from: "videos",
@@ -856,8 +851,29 @@ const getUserChannelById = asyncHandler(async (req, res) => {
             }
           },
           {
+            $lookup: {
+              from: "likes",
+              let: { videoId: "$_id" },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ["$target", "$$videoId"] },
+                        { $eq: ["$targetType", "Video"] },
+                        { $eq: ["$action", "like"] }
+                      ]
+                    }
+                  }
+                }
+              ],
+              as: "likes"
+            }
+          },
+          {
             $addFields: {
               viewCount: { $size: "$views" },
+              likesCount: { $size: "$likes" },
               durationInSeconds: {
                 $divide: [{ $subtract: ["$duration", 0] }, 1000]
               }
@@ -885,7 +901,6 @@ const getUserChannelById = asyncHandler(async (req, res) => {
         as: "videos"
       }
     },
-    // 🔁 Playlists
     {
       $lookup: {
         from: "playlists",
@@ -941,13 +956,14 @@ const getUserChannelById = asyncHandler(async (req, res) => {
         as: "playlists"
       }
     },
-    // 🧠 Aggregated counts
     {
       $addFields: {
         subscribersCount: { $size: "$subscribers" },
         subscriptionsCount: { $size: "$subscriptions" },
         videosCount: { $size: "$videos" },
-        totalViews: { $sum: "$videos.viewCount" }
+        totalViews: { $sum: "$videos.viewCount" },
+        totalLikes: { $sum: "$videos.likesCount" },
+        totalWatchTime: { $sum: "$videos.durationInSeconds" }
       }
     },
     {
@@ -963,11 +979,13 @@ const getUserChannelById = asyncHandler(async (req, res) => {
         subscriptionsCount: 1,
         videosCount: 1,
         totalViews: 1,
+        totalLikes: 1,
+        totalWatchTime: 1,
         videos: 1,
         playlists: 1,
         createdAt: 1,
         updatedAt: 1,
-        subscribers: 1 // Needed for manual subscription check
+        subscribers: 1
       }
     }
   ]);
@@ -982,7 +1000,6 @@ const getUserChannelById = asyncHandler(async (req, res) => {
 
   const channel = channelData[0];
 
-  // ✅ Check if current user is subscribed
   let channelIsSubscribedTo = false;
   let notificationPref = "none";
 
@@ -997,13 +1014,6 @@ const getUserChannelById = asyncHandler(async (req, res) => {
     }
   }
 
-  // ✅ Calculate total watch time
-  const totalWatchTime = channel.videos.reduce(
-    (sum, video) => sum + (video.durationInSeconds || 0),
-    0
-  );
-
-  // ✅ Format final response
   const responseData = {
     ...channel,
     channelIsSubscribedTo,
@@ -1012,11 +1022,11 @@ const getUserChannelById = asyncHandler(async (req, res) => {
       totalVideos: channel.videosCount,
       totalSubscribers: channel.subscribersCount,
       totalViews: channel.totalViews || 0,
-      totalWatchTime
+      totalLikes: channel.totalLikes || 0,
+      totalWatchTime: channel.totalWatchTime || 0
     }
   };
 
-  // ❌ Remove unnecessary data
   delete responseData.subscribers;
 
   return res.status(200).json({
@@ -1026,6 +1036,7 @@ const getUserChannelById = asyncHandler(async (req, res) => {
     data: responseData
   });
 });
+
 
 
 
@@ -1506,30 +1517,56 @@ export const disable2FA = async (req, res) => {
 };
 
 // delete account
-export const deleteAccount = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const user = await User.findByIdAndDelete(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // 🧹 Clean up associated data
-    await Promise.all([
-      Video.deleteMany({ owner: userId }),
-      Comment.deleteMany({ author: userId }),
-      Like.deleteMany({ user: userId }),
-      // Add any additional related deletions here
-    ]);
-
-    res.json({ message: 'Account and associated data deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting account:', error);
-    res.status(500).json({ message: 'Server error' });
+export const deleteAccount = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(404, "User not found");
   }
-};
+
+  // ✅ 1. Delete avatar from Cloudinary
+  if (user.avatar) {
+    try {
+      const segments = user.avatar.split("/");
+      const fileName = segments[segments.length - 1];
+      const publicId = `avatars/${fileName.split(".")[0]}`;
+      await cloudinary.uploader.destroy(publicId);
+    } catch (err) {
+      console.log("Error deleting avatar:", err.message);
+    }
+  }
+
+  // ✅ 2. Delete videos uploaded by the user
+  const userVideos = await Video.find({ owner: userId });
+  for (const video of userVideos) {
+    if (video.videoFile) {
+      try {
+        const segments = video.videoFile.split("/");
+        const fileName = segments[segments.length - 1];
+        const publicId = `videos/${fileName.split(".")[0]}`;
+        await cloudinary.uploader.destroy(publicId, { resource_type: "video" });
+      } catch (err) {
+        console.log("Error deleting video from Cloudinary:", err.message);
+      }
+    }
+    await video.deleteOne(); // or Video.deleteOne({ _id: video._id })
+  }
+
+  // ✅ 3. Delete playlists created by user
+  await Playlist.deleteMany({ owner: userId });
+
+  // ✅ 4. Delete comments/likes (optional cleanup)
+  await Comment.deleteMany({ user: userId });
+  await Like.deleteMany({ user: userId });
+
+  // ✅ 5. Finally, delete the user account
+  await user.deleteOne();
+
+  return res.status(200).json(
+    new ApiResponse(200, null, "User account and all data deleted successfully")
+  );
+});
+
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.YOUTUBE_CLIENT_ID,

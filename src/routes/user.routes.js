@@ -35,6 +35,8 @@ import {
   checkYouTubeStatus
 } from "../controllers/user.controllers.js";
 
+import { getAllVideos } from "../controllers/video.controllers.js";
+
 import {
   handleOAuthCallback,
   forgotPassword,
@@ -114,6 +116,8 @@ router.post("/playlist/:playlistId/videos", upload.fields([{ name: 'video' }, { 
 
 
 
+
+
 router.get("/watch-later", verifyJWT, getWatchLater);
 router.post("/watch-later/:videoId", verifyJWT, addToWatchLater);
 router.delete("/watch-later/:videoId", verifyJWT, removeFromWatchLater);
@@ -129,6 +133,8 @@ router.get("/auth-url",verifyJWT, getAuthUrl);
 router.get("/connect-youtube",verifyJWT, handleCallback);
 router.get("/disconnect-youtube", verifyJWT, disconnectYouTube);
 router.get("/check-youtube-status", verifyJWT, checkYouTubeStatus);
+
+router.get("/videos",verifyJWT, getAllVideos);
 
 
 export default router;

@@ -10,6 +10,8 @@ import { Video } from "../models/video.model.js";
 import { channel } from "diagnostics_channel";
 import {Like} from '../models/like.model.js'
 import {Comment} from '../models/comment.model.js'
+import fs from 'fs';
+import path from 'path';
 
 
 
@@ -74,160 +76,8 @@ export const updatePlaylist = asyncHandler(async (req, res) => {
 });
 
 
-// export const addVideoToPlaylist = asyncHandler(async (req, res) => {
-//   const { playlistId } = req.params;
-//   const {
-//     title,
-//     description = "",
-//     tags = [],
-//     category = "22",             // Default category ID (People & Blogs)
-//     privacyStatus = "private",   // 'public', 'private', or 'unlisted'
-//     allowComments = true,
-//     allowRatings = true,
-//     language = "en",
-//   } = req.body;
-
-//   const videoFile = req.files?.video?.[0];
-//   const thumbnailFile = req.files?.thumbnail?.[0]; // Optional thumbnail upload
-
-//   // Validate playlist ID
-//   if (!mongoose.Types.ObjectId.isValid(playlistId)) {
-//     return res.status(400).json(
-//       new ApiResponse(400, {}, "Invalid playlist ID.")
-//     );
-//   }
-
-//   // Validate required fields
-//   if (!title || title.trim().length === 0) {
-//     return res.status(400).json(
-//       new ApiResponse(400, {}, "Title is required.")
-//     );
-//   }
-
-//   if (!videoFile) {
-//     return res.status(400).json(
-//       new ApiResponse(400, {}, "Video file is required.")
-//     );
-//   }
-
-//   // Upload video file to cloud storage
-//   const videoUpload = await uploadOnCloudinary(videoFile.path);
-//   if (!videoUpload?.url) {
-//     return res.status(500).json(
-//       new ApiResponse(500, {}, "Video upload failed.")
-//     );
-//   }
-
-//   // Upload thumbnail if provided, else use default or fallback thumbnail
-//   let thumbnailUrl = "";
-//   if (thumbnailFile) {
-//     const thumbnailUpload = await uploadOnCloudinary(thumbnailFile.path);
-//     thumbnailUrl = thumbnailUpload?.url || "";
-//   } else {
-//     // fallback thumbnail logic — use video upload's thumbnail or video itself
-//     thumbnailUrl = videoUpload.thumbnailUrl || videoUpload.url;
-//   }
-
-//   // Normalize tags: accept string or array, split by commas if string
-//   const normalizedTags = Array.isArray(tags)
-//     ? tags.map((t) => t.trim())
-//     : typeof tags === "string"
-//     ? tags.split(",").map((t) => t.trim())
-//     : [];
-
-//   // Create video document with all YouTube-style properties
-//   const newVideo = await Video.create({
-//     playlistId: [playlistId],
-//     channelId: req.user.channelId,
-//     title: title.trim(),
-//     description: description.trim(),
-//     tags: normalizedTags,
-//     category,
-//     privacyStatus,                    // 'public', 'private', 'unlisted'
-//     allowComments: allowComments === "false" ? false : Boolean(allowComments),
-//     allowRatings: allowRatings === "false" ? false : Boolean(allowRatings),
-//     language,
-//     videoUrl: videoUpload.url,
-//     thumbnail: thumbnailUrl,
-//     owner: req.user._id,
-//     isPublished: privacyStatus === "public",
-//     likes: [],
-//     dislikes: [],
-//     views: 0,
-//     viewedBy: [],
-//     comments: [],
-//     uploadedAt: new Date(),
-//     playlistRef: playlistId,
-//   });
-
-//   // Add video reference inside the playlist (owned by the user)
-//   const updatedPlaylist = await Playlist.findOneAndUpdate(
-//     { _id: playlistId, owner: req.user._id },
-//     {
-//       $addToSet: {
-//         videos: {
-//           videoId: newVideo._id,
-//           title: newVideo.title,
-//           videoRef: newVideo._id,
-//           videoUrl: newVideo.videoUrl,
-//           thumbnail: newVideo.thumbnail,
-//           isPublished: newVideo.isPublished,
-//           owner: newVideo.owner,
-//           likes: newVideo.likes,
-//           views: newVideo.views,
-//           dislikes: newVideo.dislikes,
-//           viewedBy: newVideo.viewedBy,
-//           tags: newVideo.tags,
-//           comments: newVideo.comments,
-//           uploadedAt: newVideo.uploadedAt,
-//           playlistRef: playlistId,
-//         },
-//       },
-//     },
-//     { new: true }
-//   );
-
-//   if (!updatedPlaylist) {
-//     return res.status(404).json({
-//       success: false,
-//       message: "Playlist not found or you are not authorized.",
-//     });
-//   }
-
-//   // Respond with full YouTube-like JSON response
-//   return res.status(201).json({
-//     success: true,
-//     message: "Video uploaded & added to playlist successfully",
-//     data: {
-//       video: {
-//         id: newVideo._id,
-//         title: newVideo.title,
-//         description: newVideo.description,
-//         tags: newVideo.tags,
-//         category: newVideo.category,
-//         privacyStatus: newVideo.privacyStatus,
-//         allowComments: newVideo.allowComments,
-//         allowRatings: newVideo.allowRatings,
-//         language: newVideo.language,
-//         videoUrl: newVideo.videoUrl,
-//         thumbnailUrl: newVideo.thumbnail,
-//         views: newVideo.views,
-//         likesCount: (newVideo.likes || []).length,
-//         dislikesCount: (newVideo.dislikes || []).length,
-//         commentsCount: (newVideo.comments || []).length,
-//         uploadedAt: newVideo.uploadedAt,
-//         playlistId: playlistId,
-//         channelId: newVideo.channelId,
-//         ownerId: newVideo.owner,
-//       },
-//       playlist: updatedPlaylist,
-//     },
-//   });
-// });
 
 
-
-// Remove Video
 
 
 export const addVideoToPlaylist = asyncHandler(async (req, res) => {
@@ -488,8 +338,9 @@ export const getPlaylistById = asyncHandler(async (req, res) => {
     .populate({
       path: "videos",
       populate: [
-        { path: "owner", select: "_id username avatar" }, // User info
-        { path: "playlistId", select: "_id name" },       // Playlist(s)
+        { path: "owner", select: "_id username avatar" },
+        { path: "playlistId", select: "_id name" },       
+        
       ],
     });
 
