@@ -1248,7 +1248,6 @@ const loginUser = asyncHandler(async (req, res) => {
 
 const getWatchHistory = asyncHandler(async (req, res) => {
   try {
-    // Step 1: Track user based on user ID from req.user
     const userId = req.user?._id;
     if (!userId) {
       return res.status(400).json({
@@ -1257,64 +1256,111 @@ const getWatchHistory = asyncHandler(async (req, res) => {
       });
     }
 
-    // Step 2: Aggregate user’s watch history and populate video + video.owner
-    const userData = await User.aggregate([
-      {
-        $match: {
-          _id: new mongoose.Types.ObjectId(userId),
+const userData = await User.aggregate([
+  {
+    $match: { _id: new mongoose.Types.ObjectId(userId) },
+  },
+  {
+    $lookup: {
+      from: "videos",
+      localField: "watchHistory",
+      foreignField: "_id",
+      as: "watchHistory",
+      pipeline: [
+        // Lookup owner
+        {
+          $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "owner",
+            pipeline: [
+              { $project: { fullname: 1, username: 1, avatar: 1 } },
+            ],
+          },
         },
-      },
-      {
-        $lookup: {
-          from: "videos", // Name of your videos collection
-          localField: "watchHistory", // This is an array of video _id references
-          foreignField: "_id", // Match the _id field in videos collection
-          as: "watchHistory", // Embed full video documents in the result
-          pipeline: [
-            {
-              $lookup: {
-                from: "users", // Lookup video owners
-                localField: "owner", // Video's owner field
-                foreignField: "_id", // Match against the users collection
-                as: "owner", // Store owner details in 'owner' array
-                pipeline: [
-                  {
-                    $project: {
-                      fullname: 1,
-                      username: 1,
-                      avatar: 1,
-                    },
-                  },
-                ],
-              },
-            },
-            {
-              $addFields: {
-                owner: { $arrayElemAt: ["$owner", 0] }, // Flatten owner array
-              },
-            },
-          ],
-        },
-      },
-      {
-        $project: {
-          watchHistory: 1, // Only include the watchHistory field
-        },
-      },
-    ]);
+        { $addFields: { owner: { $arrayElemAt: ["$owner", 0] } } },
 
-    // Step 3: Handle if user/watchHistory not found
-    if (!userData || userData.length === 0 || !userData[0].watchHistory) {
+        // 🔥 Lookup likes
+        {
+          $lookup: {
+            from: "likes",
+            let: { videoId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$video", "$$videoId"] },
+                      { $eq: ["$action", "like"] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: "likes",
+          },
+        },
+
+        // 🔥 Lookup dislikes
+        {
+          $lookup: {
+            from: "likes",
+            let: { videoId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$video", "$$videoId"] },
+                      { $eq: ["$action", "dislike"] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: "dislikes",
+          },
+        },
+
+        // Add counts
+        {
+          $addFields: {
+            likeCount: { $size: "$likes" },
+            dislikeCount: { $size: "$dislikes" },
+          },
+        },
+
+        // Optionally remove likes/dislikes arrays to reduce payload
+        {
+          $project: {
+            likes: 0,
+            dislikes: 0,
+          },
+        },
+      ],
+    },
+  },
+  {
+    $project: {
+      watchHistory: 1,
+    },
+  },
+]);
+
+
+    const watchHistory = userData?.[0]?.watchHistory || [];
+
+    if (!watchHistory.length) {
       return res.status(404).json({
         success: false,
         message: "No watch history found for this user",
       });
     }
 
-    // Step 4: Return successful response with watch history
     return res.status(200).json({
       success: true,
-      data: userData[0].watchHistory,
+      data: watchHistory,
       message: "Watch history fetched successfully",
     });
   } catch (error) {
@@ -1325,6 +1371,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
     });
   }
 });
+
 
 
 

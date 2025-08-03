@@ -758,3 +758,52 @@ export const likeVideos = async (req, res) => {
 
 
 
+export const searchAll = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query || query.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Query is required",
+      });
+    }
+
+    const searchRegex = new RegExp(query, "i");
+
+    const [videos, channels, playlists] = await Promise.all([
+      Video.find({ title: { $regex: searchRegex } }).select("_id title thumbnail duration").limit(5),
+      User.find({ username: { $regex: searchRegex } }).select("_id username avatar").limit(5),
+      Playlist.find({ title: { $regex: searchRegex } }).select("_id title cover").limit(5),
+    ]);
+
+    const results = [
+      ...videos.map((v) => ({
+        id: v._id,
+        title: v.title,
+        type: "video",
+        thumbnail: v.thumbnail,
+        duration: v.duration,
+      })),
+      ...channels.map((c) => ({
+        id: c._id,
+        title: c.username,
+        type: "channel",
+        avatar: c.avatar,
+      })),
+      ...playlists.map((p) => ({
+        id: p._id,
+        title: p.title,
+        type: "playlist",
+        cover: p.cover,
+      })),
+    ];
+
+    res.status(200).json({ success: true, results });
+  } catch (err) {
+    console.error("Search error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+

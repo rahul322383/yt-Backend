@@ -2,9 +2,6 @@ import mongoose, { Schema } from "mongoose";
 import settingsSchema from "./sttings.model.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import crypto from "crypto";
-import speakeasy from "speakeasy";
-import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 
 const userSchema = new Schema(
@@ -71,6 +68,7 @@ const userSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Video"
     }],
+    
 
     watchLater: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
     likedVideos: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],

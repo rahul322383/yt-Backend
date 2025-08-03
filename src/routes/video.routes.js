@@ -6,7 +6,8 @@ import {
   togglePublishStatus,
   playVideoById,
   getAndTrackVideo,
-  likeVideos 
+  likeVideos, 
+  searchAll
 } from "../controllers/video.controllers.js";
 
 
@@ -15,6 +16,9 @@ import { optionalJWT } from "../middleware/optionaljwt.js";
 
 
 const router = express.Router();
+
+// search 
+router.get("/search", searchAll);
 
 // 🔓 PUBLIC ROUTES FIRST
 router.get("/videos/:videoId",optionalJWT,getVideoById);             

@@ -74,10 +74,10 @@ const videoSchema = new mongoose.Schema(
       default: [],
     },
     duration: {
-      type: Number,
+      type: String, 
     },
     size: {
-      type: Number,
+      type: String,
     },
     cloudinaryId: {
       type: String,
