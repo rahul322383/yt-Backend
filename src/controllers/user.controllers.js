@@ -1040,21 +1040,6 @@ const getUserChannelById = asyncHandler(async (req, res) => {
 
 
 
-const getPlaylistById = asyncHandler(async (req, res) => {
-  const { playlistId } = req.params;
-
-  if (!isValidObjectId(playlistId)) {
-    throw new ApiError(400, "The provided playlist ID is invalid. Please check and try again.");
-  }
-  
-  const playlist = await playlist.findById(playlistId).populate("videos");
-  if (!playlist) {
-    throw new ApiError(404, "The playlist with the specified ID could not be found. Please ensure the ID is correct.");
-  }
-
-  res.status(200).json(new ApiResponse(200, playlist, "Playlist fetched successfully"));
-});
-
 const changecurrentPassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
@@ -1161,87 +1146,6 @@ const loginUser = asyncHandler(async (req, res) => {
     }, "User logged in successfully")
   );
 });
-
-
-// const getWatchHistory = asyncHandler(async (req, res) => {
-//   try {
-//     // Step 1: Track user based on user ID from req.user
-//     const userId = req.user?._id;
-//     if (!userId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "User ID is required",
-//       });
-//     }
-
-//     // Step 2: Aggregate user’s watch history and populate video + video.owner
-//     const userData = await User.aggregate([
-//       {
-//         $match: {
-//           _id: new mongoose.Types.ObjectId(userId),
-//         },
-//       },
-//       {
-//         $lookup: {
-//           from: "videos", // Name of your videos collection
-//           localField: "watchHistory", // This is an array of video _id references
-//           foreignField: "_id", // Match the _id field in videos collection
-//           as: "watchHistory", // Embed full video documents in the result
-//           pipeline: [
-//             {
-//               $lookup: {
-//                 from: "users", // Lookup video owners
-//                 localField: "owner", // Video's owner field
-//                 foreignField: "_id", // Match against the users collection
-//                 as: "owner", // Store owner details in 'owner' array
-//                 pipeline: [
-//                   {
-//                     $project: {
-//                       fullname: 1,
-//                       username: 1,
-//                       avatar: 1,
-//                     },
-//                   },
-//                 ],
-//               },
-//             },
-//             {
-//               $addFields: {
-//                 owner: { $arrayElemAt: ["$owner", 0] }, // Flatten owner array
-//               },
-//             },
-//           ],
-//         },
-//       },
-//       {
-//         $project: {
-//           watchHistory: 1, // Only include the watchHistory field
-//         },
-//       },
-//     ]);
-
-//     // Step 3: Handle if user/watchHistory not found
-//     if (!userData || userData.length === 0 || !userData[0].watchHistory) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "No watch history found for this user",
-//       });
-//     }
-
-//     // Step 4: Return successful response with watch history
-//     return res.status(200).json({
-//       success: true,
-//       data: userData[0].watchHistory,
-//       message: "Watch history fetched successfully",
-//     });
-//   } catch (error) {
-//     console.error("Error in getWatchHistory:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//     });
-//   }
-// });
 
 
 
@@ -1756,7 +1660,6 @@ export const checkYouTubeStatus = async (req, res) => {
     updateUserCoverImage,
     deleteAvatar,
     deleteCoverImage,
-    getPlaylistById,
     getUserChannel,
     getUserChannelById,
     getWatchHistory,

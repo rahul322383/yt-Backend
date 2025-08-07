@@ -21,6 +21,11 @@ const playlistSchema = new mongoose.Schema(
           type: String,
           ref: "Channel"
         },
+        owner: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
         title: { type: String, required: true },
         videoUrl: { type: String, required: false }, // renamed for consistency
         videoRef: {
@@ -30,7 +35,7 @@ const playlistSchema = new mongoose.Schema(
         },
    
         // likes : { type: Number, default: 0 },
-        // views: { type: Number, default: 0 },
+        views: { type: Number, default: 0 },
         // comments: { type: Number, default: 0 },
         // shares: { type: Number, default: 0 },
         duration: { type: String, required: false },

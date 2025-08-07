@@ -7,7 +7,6 @@ export const getNotifications = async (req, res) => {
     const notifications = await Notification.find({})
       .sort({ createdAt: -1 })
       .lean();
-
     res.json({ success: true, data: notifications });
   } catch (error) {
     console.error("Error fetching notifications:", error);
@@ -44,7 +43,6 @@ export const markNotificationRead = async (req, res) => {
 export const markAllNotificationsRead = async (req, res) => {
   try {
     await Notification.updateMany({ isRead: false }, { isRead: true });
-
     res.json({ success: true, message: "All notifications marked as read" });
   } catch (error) {
     console.error("Error marking all notifications read:", error);

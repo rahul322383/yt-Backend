@@ -32,7 +32,7 @@ import {
   getAuthUrl,
   handleCallback,
   disconnectYouTube,
-  checkYouTubeStatus
+  checkYouTubeStatus,
 } from "../controllers/user.controllers.js";
 
 import { getAllVideos } from "../controllers/video.controllers.js";
@@ -113,6 +113,7 @@ router.delete("/remove-watch-history/:videoId", verifyJWT, removeWatchHistoryVid
 // router.post("/playlist/:playlistId/videos", upload.fields([{ name: "video", maxCount: 1 }]), addVideoToPlaylist);
 
 router.post("/playlist/:playlistId/videos", upload.fields([{ name: 'video' }, { name: 'thumbnail' }]), addVideoToPlaylist);
+
 
 
 

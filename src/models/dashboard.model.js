@@ -11,6 +11,8 @@ const dashboardSchema = new mongoose.Schema(
     recentVideos: [
       {
         video: { type: mongoose.Schema.Types.ObjectId, ref: "Video" },
+        viewedAt: { type: Date, default: Date.now },
+        owner : { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         watchedAt: { type: Date, default: Date.now },
       },
     ],

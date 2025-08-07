@@ -86,50 +86,109 @@ const getChannelStatus = asyncHandler(async (req, res) => {
 
 
 // 🔹 Get paginated channel videos
+// const getChannelVideos = asyncHandler(async (req, res) => {
+//   const { channelId } = req.params;
+//   const page = Math.max(1, parseInt(req.query.page, 10)) || 1;
+//   const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10)) || 10, 100); // Limit max 100 videos per page
+
+//   // Validate channelId
+//   if (!channelId ) {
+//     return res.status(400).json(new ApiResponse(400, null, "Invalid channel ID"));
+//   }
+
+//   // Check if the channel (user) exists
+//   const channelUser = await User.findOne({channelId} );
+//   if (!channelUser) {
+//     return res.status(404).json(new ApiResponse(404, null, "Channel not found"));
+//   }
+
+//   try {
+//     // Build a query to fetch videos owned by the channel
+//     // const query = { owner: new mongoose.Types.ObjectId(channelId) };
+//     const query = { owner: channelUser._id };
+
+
+//     // Execute both queries concurrently for performance
+//     const [videos, totalVideos] = await Promise.all([
+//       Video.find(query)
+//         .sort({ createdAt: -1 })
+//         .skip((page - 1) * limit)
+//         .limit(limit),
+//       Video.countDocuments(query),
+//     ]);
+
+//     return res.status(200).json(new ApiResponse(
+//       200,
+//       {
+//         channelId,
+//         videos,
+//         totalVideos,
+//         page,
+//         limit,
+//         totalPages: Math.ceil(totalVideos / limit),
+//       },
+//       "Channel videos retrieved successfully"
+//     ));
+//   } catch (err) {
+//     return res.status(500).json(new ApiResponse(500, null, "Internal server error"));
+//   }
+// });
+
 const getChannelVideos = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
   const page = Math.max(1, parseInt(req.query.page, 10)) || 1;
-  const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10)) || 10, 100); // Limit max 100 videos per page
+  const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10)) || 10, 100); // Max 100
 
-  // Validate channelId
-  if (!channelId ) {
+  if (!channelId) {
     return res.status(400).json(new ApiResponse(400, null, "Invalid channel ID"));
   }
 
-  // Check if the channel (user) exists
-  const channelUser = await User.findOne({channelId} );
+  // Find user by channelId
+  const channelUser = await User.findOne({ channelId });
   if (!channelUser) {
     return res.status(404).json(new ApiResponse(404, null, "Channel not found"));
   }
 
   try {
-    // Build a query to fetch videos owned by the channel
-    // const query = { owner: new mongoose.Types.ObjectId(channelId) };
     const query = { owner: channelUser._id };
 
-
-    // Execute both queries concurrently for performance
     const [videos, totalVideos] = await Promise.all([
       Video.find(query)
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
-        .limit(limit),
+        .limit(limit)
+        .populate({
+          path: "owner",
+          select: "username avatar", // Return only necessary fields
+        }),
       Video.countDocuments(query),
     ]);
 
-    return res.status(200).json(new ApiResponse(
-      200,
-      {
+    // If likes/dislikes are in a separate Like model, use aggregation instead
+    // But if likes/dislikes are stored in arrays in Video model, do:
+    const enhancedVideos = videos.map((video) => ({
+      ...video.toObject(),
+      likesCount: video.likes?.length || 0,
+      dislikesCount: video.dislikes?.length || 0,
+      creator: {
+        _id: video.owner?._id,
+        username: video.owner?.username,
+        avatar: video.owner?.avatar,
+      },
+    }));
+
+    return res.status(200).json(
+      new ApiResponse(200, {
         channelId,
-        videos,
+        videos: enhancedVideos,
         totalVideos,
         page,
         limit,
         totalPages: Math.ceil(totalVideos / limit),
-      },
-      "Channel videos retrieved successfully"
-    ));
+      }, "Channel videos retrieved successfully")
+    );
   } catch (err) {
+    console.error("Error fetching channel videos:", err);
     return res.status(500).json(new ApiResponse(500, null, "Internal server error"));
   }
 });
