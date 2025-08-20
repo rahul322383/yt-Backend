@@ -2,6 +2,22 @@ import Notification from "../models/Notification.model.js";
 
 // GET /notifications
 // Fetch all notifications, newest first (PUBLIC)
+// 
+
+export const createNotification = async ({ recipient, sender, type, entityId, message }) => {
+  try {
+    const notification = new Notification({ recipient, sender, type, entityId, message });
+    await notification.save();
+
+    // Optional: Push real-time event via Socket.io or WebSocket here
+    // io.to(recipient).emit("notification", notification);
+
+    return notification;
+  } catch (error) {
+    console.error("Error creating notification:", error);
+  }
+};
+
 export const getNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({})

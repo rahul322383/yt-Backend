@@ -179,6 +179,7 @@ export const getAllVideos = asyncHandler(async (req, res) => {
   );
 });
 
+
 // export const getVideoById = asyncHandler(async (req, res) => {
 //   const { videoId } = req.params;
 //   const userId = req.user?._id;
@@ -191,7 +192,9 @@ export const getAllVideos = asyncHandler(async (req, res) => {
 //     videoId,
 //     { $inc: { views: 1 } },
 //     { new: true }
-//   ).lean();
+//   )
+//     .populate("owner", "_id username avatar fullName")
+//     .lean();
 
 //   if (!video) {
 //     return res.status(404).json(new ApiResponse(404, {}, "Video not found"));
@@ -220,8 +223,21 @@ export const getAllVideos = asyncHandler(async (req, res) => {
 //   }
 
 //   const channel = await User.findOne({ channelId: video.channelId })
-//     .select("channelId fullName avatar")
+//     .select("channelId fullName avatar _id")
 //     .lean();
+
+//   // ✅ Check if current user is subscribed to this channel
+//   let isSubscribed = false;
+//   let notificationEnabled = false;
+//   if (userId && channel?.channelId) {
+//     const subscription = await Subscription.findOne({
+//       subscriber: userId,
+//      channel: channel.channelId
+//      }).lean();
+//      isSubscribed = !!subscription;
+//       notificationEnabled = subscription?.notifications || false;
+
+//   }
 
 //   const [likesCount, dislikesCount, commentsCount] = await Promise.all([
 //     Like.countDocuments({ video: video._id, action: "like" }),
@@ -249,6 +265,14 @@ export const getAllVideos = asyncHandler(async (req, res) => {
 //     createdAt: video.createdAt,
 //     updatedAt: video.updatedAt,
 //     isPublished: video.isPublished,
+//     isSubscribed: isSubscribed, 
+//     notificationEnabled: notificationEnabled,
+//     owner: {
+//       _id: video?.owner?._id,
+//       username: video?.owner?.username,
+//       avatar: video?.owner?.avatar,
+//       fullName: video?.owner?.fullName,
+//     },
 //   };
 
 //   const playlistVideoIds = playlist.videos.map(v => new mongoose.Types.ObjectId(v.videoId));
@@ -303,6 +327,13 @@ export const getAllVideos = asyncHandler(async (req, res) => {
 //       avatarUrl: channelInfo?.avatar || null,
 //       isPublished: videoDoc?.isPublished ?? true,
 //       createdAt: videoDoc?.createdAt,
+//        owner: {
+//     _id: video?._id,
+//     username: video?.username,
+//     avatar: video?.avatar,
+//     fullName: video?.fullName,
+//   },
+
 //     };
 //   });
 
@@ -317,7 +348,6 @@ export const getAllVideos = asyncHandler(async (req, res) => {
 //     )
 //   );
 // });
-
 
 export const getVideoById = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
@@ -339,7 +369,7 @@ export const getVideoById = asyncHandler(async (req, res) => {
     return res.status(404).json(new ApiResponse(404, {}, "Video not found"));
   }
 
-  // ✅ Track user watch history
+  // ✅ Track watch history
   if (userId && mongoose.Types.ObjectId.isValid(userId)) {
     await User.findByIdAndUpdate(
       userId,
@@ -365,17 +395,16 @@ export const getVideoById = asyncHandler(async (req, res) => {
     .select("channelId fullName avatar _id")
     .lean();
 
-  // ✅ Check if current user is subscribed to this channel
+  // ✅ Check if subscribed
   let isSubscribed = false;
   let notificationEnabled = false;
   if (userId && channel?.channelId) {
     const subscription = await Subscription.findOne({
       subscriber: userId,
-     channel: channel.channelId
-     }).lean();
-     isSubscribed = !!subscription;
-      notificationEnabled = subscription?.notifications || false;
-
+      channel: channel.channelId
+    }).lean();
+    isSubscribed = !!subscription;
+    notificationEnabled = subscription?.notifications || false;
   }
 
   const [likesCount, dislikesCount, commentsCount] = await Promise.all([
@@ -384,6 +413,10 @@ export const getVideoById = asyncHandler(async (req, res) => {
     Comment.countDocuments({ video: video._id }),
   ]);
 
+  // ✅ Owner check
+  const isOwner = req.user && video.owner._id.toString() === req.user._id.toString();
+
+  // ✅ Put isOwner directly in video object
   const videoData = {
     _id: video._id,
     title: embeddedVideo.title || video.title,
@@ -404,8 +437,9 @@ export const getVideoById = asyncHandler(async (req, res) => {
     createdAt: video.createdAt,
     updatedAt: video.updatedAt,
     isPublished: video.isPublished,
-    isSubscribed: isSubscribed, 
-    notificationEnabled: notificationEnabled,
+    isSubscribed,
+    notificationEnabled,
+    isOwner, // ✅ HERE
     owner: {
       _id: video?.owner?._id,
       username: video?.owner?.username,
@@ -414,8 +448,8 @@ export const getVideoById = asyncHandler(async (req, res) => {
     },
   };
 
+  // Playlist videos
   const playlistVideoIds = playlist.videos.map(v => new mongoose.Types.ObjectId(v.videoId));
-
   const [playlistVideos, likeAgg] = await Promise.all([
     Video.find({ _id: { $in: playlistVideoIds } }).lean(),
     Like.aggregate([
@@ -433,7 +467,6 @@ export const getVideoById = asyncHandler(async (req, res) => {
   for (const item of likeAgg) {
     const vid = String(item._id.video);
     if (!likesMap[vid]) likesMap[vid] = { likeCount: 0, dislikeCount: 0 };
-
     if (item._id.action === "like") likesMap[vid].likeCount = item.count;
     else if (item._id.action === "dislike") likesMap[vid].dislikeCount = item.count;
   }
@@ -466,13 +499,12 @@ export const getVideoById = asyncHandler(async (req, res) => {
       avatarUrl: channelInfo?.avatar || null,
       isPublished: videoDoc?.isPublished ?? true,
       createdAt: videoDoc?.createdAt,
-       owner: {
-    _id: video?._id,
-    username: video?.username,
-    avatar: video?.avatar,
-    fullName: video?.fullName,
-  },
-
+      owner: {
+        _id: videoDoc?.owner?._id,
+        username: videoDoc?.owner?.username,
+        avatar: videoDoc?.owner?.avatar,
+        fullName: videoDoc?.owner?.fullName,
+      },
     };
   });
 
@@ -480,7 +512,7 @@ export const getVideoById = asyncHandler(async (req, res) => {
     new ApiResponse(
       200,
       {
-        video: videoData,
+        video: videoData, // now has isOwner
         playlistVideos: formattedPlaylistVideos,
       },
       "Video details fetched successfully"

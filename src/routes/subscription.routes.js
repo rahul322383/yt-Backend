@@ -7,11 +7,11 @@ import {
 } from "../controllers/subscription.controllers.js";
 import { verifyJWT } from "../middleware/auth.middleware.js";
 
-
+ 
 const router = Router();
 
 // ✅ Get all channels a user is subscribed to
-router.get("/subscribed/:channelId", getSubscribedChannels);
+router.get("/subscribed/:channelId", verifyJWT,getSubscribedChannels);
 
 // ✅ Subscribe/Unsubscribe to a channel
 router.post("/:channelId",  verifyJWT,toggleSubscription);

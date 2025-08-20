@@ -8,6 +8,16 @@ import {Like} from '../models/like.model.js'
 import {Comment} from '../models/comment.model.js'
 
 
+import ffmpeg from "fluent-ffmpeg";
+
+const getVideoDuration = (filePath) => {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err) return reject(err);
+      resolve(metadata.format.duration); // duration in seconds (float)
+    });
+  });
+};
 
 
 // Create Playlist
@@ -278,13 +288,33 @@ export  const deletePlaylist = asyncHandler(async (req, res) => {
 
 
 // Get All Playlists by User
+// export const getPlaylistsByUser = asyncHandler(async (req, res) => {
+//   const playlists = await Playlist.find({ owner: req.user._id }).sort({ createdAt: -1 });
+
+//   return res
+//     .status(200)
+//     .json(new ApiResponse(200, playlists, "Playlists fetched successfully"));
+// });
+
+
+
+
 export const getPlaylistsByUser = asyncHandler(async (req, res) => {
-  const playlists = await Playlist.find({ owner: req.user._id }).sort({ createdAt: -1 });
+  const playlists = await Playlist.find({ owner: req.user._id })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (!playlists || playlists.length === 0) {
+    return res
+      .status(200)
+      .json(new ApiResponse(200, [], "No playlists found for this user"));
+  }
 
   return res
     .status(200)
     .json(new ApiResponse(200, playlists, "Playlists fetched successfully"));
 });
+
 
 // Get Playlist by ID
 // export const getPlaylistById = asyncHandler(async (req, res) => {
@@ -346,42 +376,167 @@ export const getPlaylistsByUser = asyncHandler(async (req, res) => {
 // });
 
 
+// export const getPlaylistById = asyncHandler(async (req, res) => {
+//   const { playlistId } = req.params;
+
+//   if (!mongoose.Types.ObjectId.isValid(playlistId)) {
+//     return res.status(400).json(new ApiResponse(400, null, "Invalid playlist ID"));
+//   }
+
+//   const playlist = await Playlist.findById(playlistId)
+//     .populate({
+//       path: "videos",
+//       populate: [
+//         {
+//           path: "owner",
+//           select: "_id username avatar fullName",
+//         },
+//         {
+//           path: "playlistId",
+//           select: "_id name",
+//         },
+//       ],
+//     });
+
+//   if (!playlist) {
+//     return res.status(404).json(new ApiResponse(404, null, "Playlist not found"));
+//   }
+
+//   const enhancedVideos = await Promise.all(
+//     playlist.videos.map(async (video) => {
+//       const [likeCount, dislikeCount, commentsCount] = await Promise.all([
+//         Like.countDocuments({ targetId: video._id, action: "like" }),
+//         Like.countDocuments({ targetId: video._id, action: "dislike" }),
+//         Comment.countDocuments({ video: video._id }),
+//       ]);
+
+//       return {
+//         ...video.toObject(), // 💡 safer than _doc
+//         likeCount,
+//         dislikeCount,
+//         commentsCount,
+//       };
+//     })
+//   );
+
+//   const fullPlaylist = {
+//     ...playlist.toObject(),
+//     videos: enhancedVideos,
+//   };
+
+//   return res
+//     .status(200)
+//     .json(new ApiResponse(200, fullPlaylist, "Playlist with full video details fetched"));
+// });
+
+
+// export const getPlaylistById = asyncHandler(async (req, res) => {
+//   const { playlistId } = req.params;
+
+//   if (!mongoose.Types.ObjectId.isValid(playlistId)) {
+//     return res
+//       .status(400)
+//       .json(new ApiResponse(400, null, "Invalid playlist ID"));
+//   }
+
+//   // Get playlist without populating views yet
+//   const playlist = await Playlist.findById(playlistId)
+//     .populate({
+//       path: "videos.owner",
+//       select: "_id username avatar fullName",
+//     })
+//     .populate({
+//       path: "videos",
+//       select: "_id name",
+//     });
+
+//   if (!playlist) {
+//     return res
+//       .status(404)
+//       .json(new ApiResponse(404, null, "Playlist not found"));
+//   }
+
+//   // Enhance each video with live views + counts
+//   const enhancedVideos = await Promise.all(
+//     playlist.videos.map(async (video) => {
+//       // Fetch the real video document
+//       const videoDoc = await Video.findById(video.videoRef).select("views");
+
+//       const [likeCount, dislikeCount, commentsCount] = await Promise.all([
+//         Like.countDocuments({ targetId: video.videoRef, action: "like" }),
+//         Like.countDocuments({ targetId: video.videoRef, action: "dislike" }),
+//         Comment.countDocuments({ video: video.videoRef }),
+//       ]);
+
+//       return {
+//         ...video.toObject(),
+//         views: videoDoc ? videoDoc.views : 0, // live views
+//         likeCount,
+//         dislikeCount,
+//         commentsCount,
+//       };
+//     })
+//   );
+
+//   const fullPlaylist = {
+//     ...playlist.toObject(),
+//     videos: enhancedVideos,
+//   };
+
+//   return res
+//     .status(200)
+//     .json(
+//       new ApiResponse(
+//         200,
+//         fullPlaylist,
+//         "Playlist with full video details fetched"
+//       )
+//     );
+// });
+
+
 export const getPlaylistById = asyncHandler(async (req, res) => {
   const { playlistId } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(playlistId)) {
-    return res.status(400).json(new ApiResponse(400, null, "Invalid playlist ID"));
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid playlist ID"));
   }
 
+  // Get playlist with owner and playlistId populated
   const playlist = await Playlist.findById(playlistId)
     .populate({
+      path: "videos.owner",
+      select: "_id username avatar fullName",
+    })
+    .populate({
       path: "videos",
-      populate: [
-        {
-          path: "owner",
-          select: "_id username avatar fullName",
-        },
-        {
-          path: "playlistId",
-          select: "_id name",
-        },
-      ],
+      select: "_id name",
     });
 
   if (!playlist) {
-    return res.status(404).json(new ApiResponse(404, null, "Playlist not found"));
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Playlist not found"));
   }
 
+  // Enhance each video with live views, duration, and counts
   const enhancedVideos = await Promise.all(
     playlist.videos.map(async (video) => {
+      // Fetch real-time views & duration from Video model
+      const videoDoc = await Video.findById(video.videoRef).select("views duration");
+
       const [likeCount, dislikeCount, commentsCount] = await Promise.all([
-        Like.countDocuments({ targetId: video._id, action: "like" }),
-        Like.countDocuments({ targetId: video._id, action: "dislike" }),
-        Comment.countDocuments({ video: video._id }),
+        Like.countDocuments({ targetId: video.videoRef, action: "like" }),
+        Like.countDocuments({ targetId: video.videoRef, action: "dislike" }),
+        Comment.countDocuments({ video: video.videoRef }),
       ]);
 
       return {
-        ...video.toObject(), // 💡 safer than _doc
+        ...video.toObject(),
+        views: videoDoc ? videoDoc.views : 0,       // real-time views
+        duration: videoDoc ? videoDoc.duration : null, // real-time duration
         likeCount,
         dislikeCount,
         commentsCount,
@@ -396,9 +551,14 @@ export const getPlaylistById = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, fullPlaylist, "Playlist with full video details fetched"));
+    .json(
+      new ApiResponse(
+        200,
+        fullPlaylist,
+        "Playlist with full video details fetched"
+      )
+    );
 });
-
 
 
 

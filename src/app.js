@@ -71,7 +71,7 @@ app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/users/tweets", tweetRouter);
 app.use("/api/v1/users/subscribe", subscriptionRouter);
-// app.use("/api/v1/users/videos", videoRouter);// get all videos
+app.use("/api/v1/users/videos", videoRouter);// get all videos
 app.use("/api/v1/user/playlist", videoRouter);
 // app.use("/api/v1/users/videos", commentRouter);//comment video
 app.use("/api/v1/user", likeRouter);//like video

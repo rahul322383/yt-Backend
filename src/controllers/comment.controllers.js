@@ -92,6 +92,8 @@ const addComment = asyncHandler(async (req, res) => {
 
 
 
+
+
 const getVideoComments = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   const userId = req.user?._id ? new mongoose.Types.ObjectId(req.user._id) : null;
@@ -141,6 +143,7 @@ const getVideoComments = asyncHandler(async (req, res) => {
           { $unwind: "$replyOwnerDetails" },
           {
             $addFields: {
+              ownerId: "$owner", // keep raw ObjectId for ownership check
               likesCount: { $cond: [{ $isArray: "$likes" }, { $size: "$likes" }, 0] },
               dislikesCount: { $cond: [{ $isArray: "$dislikes" }, { $size: "$dislikes" }, 0] },
               isLikedByUser: userId
@@ -153,12 +156,15 @@ const getVideoComments = asyncHandler(async (req, res) => {
           },
           {
             $project: {
+              _id: 1,
               content: 1,
               createdAt: 1,
+              ownerId: 1,
               likesCount: 1,
               dislikesCount: 1,
               isLikedByUser: 1,
               isDislikedByUser: 1,
+              "replyOwnerDetails._id": 1,
               "replyOwnerDetails.username": 1,
               "replyOwnerDetails.avatar": 1,
             },
@@ -172,6 +178,7 @@ const getVideoComments = asyncHandler(async (req, res) => {
     { $limit: limit },
     {
       $addFields: {
+        ownerId: "$owner", // keep raw ObjectId for ownership check
         likesCount: { $cond: [{ $isArray: "$likes" }, { $size: "$likes" }, 0] },
         dislikesCount: { $cond: [{ $isArray: "$dislikes" }, { $size: "$dislikes" }, 0] },
         isLikedByUser: userId
@@ -184,12 +191,15 @@ const getVideoComments = asyncHandler(async (req, res) => {
     },
     {
       $project: {
+        _id: 1,
         content: 1,
         createdAt: 1,
+        ownerId: 1,
         likesCount: 1,
         dislikesCount: 1,
         isLikedByUser: 1,
         isDislikedByUser: 1,
+        "ownerDetails._id": 1,
         "ownerDetails.username": 1,
         "ownerDetails.avatar": 1,
         replies: 1,
@@ -217,7 +227,6 @@ const getVideoComments = asyncHandler(async (req, res) => {
     )
   );
 });
-
 
 
 

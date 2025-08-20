@@ -6,6 +6,7 @@ import { Tweet } from "../models/tweet.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { createNotification } from "./notificatonController.js";
 
 // ---------- Like Logic ----------
 const likeEntity = async ({ userId, targetId, model, field }) => {
@@ -116,54 +117,6 @@ export const dislikeComment = createDislikeHandler("comment", Comment, "comment"
 export const likeTweet = createLikeHandler("tweet", Tweet, "tweet");
 export const dislikeTweet = createDislikeHandler("tweet", Tweet, "tweet");
 
-// ---------- Get Liked Videos ----------
-// export const getLikedVideos = asyncHandler(async (req, res) => {
-//   let { page = 1, limit = 10 } = req.query;
-//   page = Number(page);
-//   limit = Number(limit);
-//   const skip = (page - 1) * limit;
-
-//   const liked = await Like.find({
-//     // likedBy: req.user._id,
-//     video: { $exists: true },
-//     action: "like",
-//   })
-//     .skip(skip)
-//     .limit(limit)
-//     .populate({
-//       path: "video",
-//       match: { status: { $ne: "deleted" } },
-//       select: "title thumbnail views description createdAt updatedAt status genre tags videoUrl",
-//       populate: {
-//         path: "owner",
-//         select: "username  email",
-//       },
-//     })
-//     .sort({ createdAt: -1 })
-//     .lean();
-
-//   const likedVideos = liked.map((item) => item.video).filter(Boolean);
-
-//   const totalLikedVideos = await Like.countDocuments({
-//     // likedBy: req.user._id,
-//     video: { $exists: true },
-//     action: "like",
-//   });
-
-//   return res.status(200).json(
-//     new ApiResponse(
-//       200,
-//       {
-//         likedVideos,
-//         total: likedVideos.length,
-//         page,
-//         pages: Math.ceil(totalLikedVideos / limit),
-//       },
-//       "Liked videos retrieved successfully"
-//     )
-//   );
-// });
-
 
 export const getVideoLikeCount = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
@@ -266,84 +219,6 @@ export const getLikedVideos = asyncHandler(async (req, res) => {
 
 
 
-// ---------- Toggle Video Like ----------
-// controllers/like.controller.js
-// export const toggleVideoLike = asyncHandler(async (req, res) => {
-//   const { videoId } = req.params;
-//   const { action } = req.body; // 'like' | 'dislike'
-
-//   // ✅ Ensure user is authenticated
-//   if (!req.user || !req.user._id) {
-//     return res.status(401).json(new ApiResponse(401, null, "Unauthorized"));
-//   }
-//   console.log("User ID:", req.user._id);
-
-//   // ✅ Validate action
-//   if (!["like", "dislike"].includes(action)) {
-//     return res.status(400).json(new ApiResponse(400, null, "Invalid action"));
-//   }
-
-//   // ✅ Validate videoId
-//   if (!isValidObjectId(videoId)) {
-//     return res.status(400).json(new ApiResponse(400, null, "Invalid video ID"));
-//   }
-
-//   // ✅ Find video
-//   const video = await Video.findById(videoId);
-//   if (!video || video.status === "deleted") {
-//     return res.status(404).json(new ApiResponse(404, null, "Video not found"));
-//   }
-
-//   // ✅ Check if user already liked/disliked
-//   const existing = await Like.findOne({
-//     likedBy: req.user._id,
-//     video: videoId,
-//   });
-
-//   if (existing) {
-//     if (existing.action === action) {
-//       // User clicked again → remove like/dislike
-//       await existing.deleteOne();
-//     } else {
-//       // Switch between like <-> dislike
-//       existing.action = action;
-//       await existing.save();
-//     }
-//   } else {
-//     // New like/dislike
-//     await Like.create({
-//       likedBy: req.user._id,
-//       video: videoId,
-//       action,
-//     });
-//   }
-
-//   // ✅ Count updated likes/dislikes
-//   const [likes, dislikes] = await Promise.all([
-//     Like.countDocuments({ video: videoId, action: "like" }),
-//     Like.countDocuments({ video: videoId, action: "dislike" }),
-//   ]);
-
-//   const userLike = await Like.findOne({
-//     video: videoId,
-//     likedBy: req.user._id,
-//   });
-
-//   return res.status(200).json(
-//     new ApiResponse(
-//       200,
-//       {
-//         likes,
-//         dislikes,
-//         upvoted: userLike?.action === "like",
-//         downvoted: userLike?.action === "dislike",
-//       },
-//       "Video like/dislike toggled"
-//     )
-//   );
-// });
-
-
 export const toggleVideoLike = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   const { action } = req.body;
@@ -370,6 +245,16 @@ export const toggleVideoLike = asyncHandler(async (req, res) => {
   if (!video || video.status === "deleted") {
     return res.status(404).json(new ApiResponse(404, null, "Video not found"));
   }
+
+  //  if (String(video.owner._id) !== String(req.user._id)) {
+  //     await createNotification({
+  //       recipient: video.owner._id,
+  //       sender: req.user._id,
+  //       type: "like",
+  //       entityId: video._id,
+  //       message: `${req.user.username} liked your video "${video.title}"`
+  //     });
+  //   }
 
   const existing = await Like.findOne({ likedBy: req.user._id, video: videoId });
 

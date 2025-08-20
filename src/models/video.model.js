@@ -11,12 +11,12 @@ const videoSchema = new mongoose.Schema(
       default: () => uuidv4(),
       unique: true,
     },
-    // playlistId: [
-    //   {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: "Playlist",
-    //   },
-    // ],
+    playlistId: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Playlist",
+      },
+    ],
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
