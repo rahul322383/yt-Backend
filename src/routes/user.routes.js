@@ -52,6 +52,8 @@ import { addVideoToPlaylist } from "../controllers/playlist.controllers.js";
 
 // Subroutes
 import playlistRoutes from "./playlist.routes.js";
+import { verify } from "crypto";
+import { optionalJWT } from "../middleware/optionaljwt.js";
 
 const router = express.Router();
 
@@ -104,7 +106,7 @@ router.delete("/cover-delete", verifyJWT, deleteCoverImage);
 // router.get("/c/:channelId", verifyJWT, getUserChannelById);
 
 router.get("/c/:username",  getUserChannel);
-router.get("/channel/:channelId", getUserChannelById);
+router.get("/channel/:channelId",optionalJWT,getUserChannelById);
 router.get("/watch-history", verifyJWT, getWatchHistory);
 router.delete("/clear-watch-history", verifyJWT, clearWatchHistory);
 router.delete("/remove-watch-history/:videoId", verifyJWT, removeWatchHistoryVideo);

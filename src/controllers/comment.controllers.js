@@ -231,34 +231,74 @@ const getVideoComments = asyncHandler(async (req, res) => {
 
 
 // ✏️ Update a comment
+// const updateComment = asyncHandler(async (req, res) => {
+//   const { commentId } = req.params;
+//   const { content } = req.body;
+
+//   if (!validateObjectId(commentId)) {
+//     return res.status(400).json(new ApiResponse(400, null, "Invalid Comment ID"));
+//   }
+
+//   if (!content?.trim()) {
+//     return res.status(400).json(new ApiResponse(400, null, "Comment content cannot be empty"));
+//   }
+
+//   const comment = await Comment.findById(commentId);
+//   if (!comment || comment.isDeleted) {
+//     return res.status(404).json(new ApiResponse(404, null, "Comment not found"));
+//   }
+
+//   if (!comment.owner.equals(req.user._id) && req.user.role !== "admin") {
+//     return res.status(403).json(new ApiResponse(403, null, "Not authorized to edit this comment"));
+//   }
+
+//   comment.content = content.trim();
+//   await comment.save();
+
+//   return res.status(200).json(
+//     new ApiResponse(200, comment, "Comment updated successfully")
+//   );
+// });
 const updateComment = asyncHandler(async (req, res) => {
   const { commentId } = req.params;
   const { content } = req.body;
 
+  // Validate ID
   if (!validateObjectId(commentId)) {
     return res.status(400).json(new ApiResponse(400, null, "Invalid Comment ID"));
   }
 
+  // Validate content
   if (!content?.trim()) {
     return res.status(400).json(new ApiResponse(400, null, "Comment content cannot be empty"));
   }
 
+  // Find the comment
   const comment = await Comment.findById(commentId);
   if (!comment || comment.isDeleted) {
     return res.status(404).json(new ApiResponse(404, null, "Comment not found"));
   }
 
+  // Check ownership or admin role
   if (!comment.owner.equals(req.user._id) && req.user.role !== "admin") {
     return res.status(403).json(new ApiResponse(403, null, "Not authorized to edit this comment"));
   }
 
+  // Update and save
   comment.content = content.trim();
   await comment.save();
 
-  return res.status(200).json(
-    new ApiResponse(200, comment, "Comment updated successfully")
+  // Return updated with populated owner details
+  const updatedComment = await Comment.findById(commentId).populate(
+    "owner",
+    "username avatar"
   );
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedComment, "Comment updated successfully"));
 });
+
 
 // ❌ Soft delete a comment
 const deleteComment = asyncHandler(async (req, res) => {

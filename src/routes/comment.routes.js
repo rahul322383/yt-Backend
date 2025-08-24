@@ -25,7 +25,7 @@ router.post("/:videoId",verifyJWT, addComment);
 router.get("/:videoId", getVideoComments);
 
 // ✏️ Update a comment
-router.patch("/:commentId",verifyJWT,  updateComment);
+router.patch("/:commentId",verifyJWT, updateComment);
 
 // ❌ Soft delete a comment
 router.delete("/:commentId",verifyJWT, deleteComment);

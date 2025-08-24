@@ -31,9 +31,21 @@ const channelSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
-    subscribersCount: {
-      type: Number,
-      default: 0,
+    likes: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    videos: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Video',
+    },
+    comments: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Comment',
+    },
+    subscriptions: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subscription',
     },
     isVerified: {
       type: Boolean,
@@ -53,3 +65,4 @@ channelSchema.index({ channelId: 1, user: 1 });
 const Channel = mongoose.model('Channel', channelSchema);
 
 export default Channel;
+

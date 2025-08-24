@@ -7,7 +7,7 @@ const subscriptionSchema = new mongoose.Schema({
     required: true,
   },
   channel: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
   },
@@ -16,9 +16,9 @@ const subscriptionSchema = new mongoose.Schema({
     default: Date.now,
   },
   notifications: {
-  type: Boolean,
-  default: false,
-}
+    type: Boolean,
+    default: false,
+  },
 
 }, {
   timestamps: true,

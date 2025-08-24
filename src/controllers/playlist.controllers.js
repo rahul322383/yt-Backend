@@ -299,8 +299,25 @@ export  const deletePlaylist = asyncHandler(async (req, res) => {
 
 
 
+// export const getPlaylistsByUser = asyncHandler(async (req, res) => {
+//   const playlists = await Playlist.find({ owner: req.user._id })
+//     .sort({ createdAt: -1 })
+//     .lean();
+
+//   if (!playlists || playlists.length === 0) {
+//     return res
+//       .status(200)
+//       .json(new ApiResponse(200, [], "No playlists found for this user"));
+//   }
+
+//   return res
+//     .status(200)
+//     .json(new ApiResponse(200, playlists, "Playlists fetched successfully"));
+// });
+
 export const getPlaylistsByUser = asyncHandler(async (req, res) => {
   const playlists = await Playlist.find({ owner: req.user._id })
+    .populate("owner", "_id username email") // ✅ populate owner details if needed
     .sort({ createdAt: -1 })
     .lean();
 
@@ -314,6 +331,7 @@ export const getPlaylistsByUser = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, playlists, "Playlists fetched successfully"));
 });
+
 
 
 // Get Playlist by ID
